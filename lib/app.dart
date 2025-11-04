@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'router.dart';
 import 'theme/theme.dart';
+import 'theme/mode_provider.dart';
 
 class IronPulseApp extends ConsumerWidget {
   const IronPulseApp({super.key});
@@ -13,14 +14,14 @@ class IronPulseApp extends ConsumerWidget {
     final GoRouter router = ref.watch(appRouterProvider);
     final ThemeData light = buildLightTheme();
     final ThemeData dark = buildDarkTheme();
+    final ThemeMode mode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'IronPulse',
       theme: light,
       darkTheme: dark,
+      themeMode: mode, // <-- controlled by Riverpod
       routerConfig: router,
     );
   }
 }
-
-
