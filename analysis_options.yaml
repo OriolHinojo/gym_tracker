@@ -1,0 +1,19 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - lib/**.g.dart
+    - lib/**.freezed.dart
+
+linter:
+  rules:
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - always_declare_return_types
+    - avoid_print
+    - unawaited_futures
+    - directives_ordering
+    - prefer_single_quotes
+    - public_member_api_docs
+    - type_annotate_public_apis
