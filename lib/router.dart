@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import 'features/home/home_screen.dart';
-import 'features/library/library_screen.dart';
-import 'features/log/log_screen.dart';
-import 'features/more/more_screen.dart';
-import 'features/progress/progress_screen.dart';
+import 'screens/home/home_screen.dart';
+import 'screens/library/library_screen.dart';
+import 'screens/log/log_screen.dart';
+import 'screens/more/more_screen.dart';
+import 'screens/progress/progress_screen.dart';
 
 final Provider<GoRouter> appRouterProvider = Provider((ref) {
   final GlobalKey<NavigatorState> rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
@@ -63,5 +63,3 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
     ],
   );
 });
-
-
