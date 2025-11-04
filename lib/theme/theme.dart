@@ -1,6 +1,12 @@
+// lib/theme/theme.dart
 import 'package:flutter/material.dart';
 
-const Color _seed = Color(0xFF3E8E7E); // your brand color
+/// Try a few seeds:
+/// - Violet/Indigo: 0xFF6D5DF6 (current)
+/// - Teal:          0xFF14B8A6
+/// - Electric Blue: 0xFF0EA5E9
+/// - Punchy Pink:   0xFFEC4899
+const Color _seed = Color(0xFF6D5DF6);
 
 ThemeData buildLightTheme() => _buildTheme(Brightness.light);
 ThemeData buildDarkTheme()  => _buildTheme(Brightness.dark);
@@ -17,14 +23,26 @@ ThemeData _buildTheme(Brightness brightness) {
     visualDensity: VisualDensity.adaptivePlatformDensity,
   );
 
+  // Brand extension: handy gradient + status colors accessible via Theme.of(context).extension<BrandColors>()!
+  final brand = BrandColors(
+    gradientStart: scheme.primary,
+    gradientEnd: scheme.tertiary,
+    success: const Color(0xFF22C55E),
+    warning: const Color(0xFFF59E0B),
+    danger:  const Color(0xFFEF4444),
+  );
+
   return base.copyWith(
-    // Typography accents
+    extensions: <ThemeExtension<dynamic>>[brand],
+
+    // Typography accents (crisper section titles)
     textTheme: base.textTheme.copyWith(
-      titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-      titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      titleLarge: base.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.2),
+      titleMedium: base.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      labelLarge: base.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
     ),
 
-    // AppBar
+    // AppBar — flat, colorful surfaces
     appBarTheme: base.appBarTheme.copyWith(
       elevation: 0,
       scrolledUnderElevation: 0,
@@ -33,11 +51,11 @@ ThemeData _buildTheme(Brightness brightness) {
       foregroundColor: scheme.onSurface,
     ),
 
-    // NavigationBar
+    // NavigationBar — clearer selection pill + toned icons
     navigationBarTheme: base.navigationBarTheme.copyWith(
       elevation: 0,
       height: 64,
-      indicatorColor: scheme.primaryContainer.withOpacity(0.55),
+      indicatorColor: scheme.primaryContainer.withOpacity(0.65),
       surfaceTintColor: Colors.transparent,
       labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
       iconTheme: WidgetStateProperty.resolveWith((states) {
@@ -49,21 +67,15 @@ ThemeData _buildTheme(Brightness brightness) {
       }),
     ),
 
-    // Cards
+    // Cards — soft, rounded, no muddy surface tint
     cardTheme: base.cardTheme.copyWith(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       margin: EdgeInsets.zero,
     ),
 
-    // ListTile
-    listTileTheme: base.listTileTheme.copyWith(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      iconColor: scheme.onSurfaceVariant,
-    ),
-
-    // Buttons
+    // Buttons — confident shapes
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -73,6 +85,8 @@ ThemeData _buildTheme(Brightness brightness) {
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         elevation: 0,
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       ),
@@ -83,45 +97,108 @@ ThemeData _buildTheme(Brightness brightness) {
       ),
     ),
 
-    // FAB
+    // FAB — vivid by default
     floatingActionButtonTheme: base.floatingActionButtonTheme.copyWith(
       elevation: 0,
-      foregroundColor: scheme.onPrimary,
       backgroundColor: scheme.primary,
-      extendedTextStyle: base.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+      foregroundColor: scheme.onPrimary,
+      extendedTextStyle: base.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
     ),
 
-    // Inputs
+    // Chips — tighter, colorful
+    chipTheme: base.chipTheme.copyWith(
+      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      selectedColor: scheme.primaryContainer,
+      labelStyle: base.textTheme.labelLarge,
+    ),
+
+    // Inputs — subtle fill for elegance
     inputDecorationTheme: base.inputDecorationTheme.copyWith(
-      border: const OutlineInputBorder(),
       isDense: true,
       filled: true,
-      fillColor: scheme.surfaceContainerHighest.withOpacity(
-        brightness == Brightness.dark ? 0.16 : 0.06,
+      fillColor: brightness == Brightness.dark
+          ? scheme.surfaceContainerHighest.withOpacity(0.18)
+          : scheme.surfaceContainerHighest.withOpacity(0.08),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: scheme.outlineVariant),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: scheme.primary, width: 2),
       ),
     ),
 
-    // Dividers
+    // Dividers — soft & spaced
     dividerTheme: base.dividerTheme.copyWith(
       space: 16,
       thickness: 1,
-      color: scheme.outlineVariant.withOpacity(0.4),
+      color: scheme.outlineVariant.withOpacity(0.35),
     ),
 
-    // Sheets/dialogs
+    // Bottom sheets & dialogs — rounded, clean
     bottomSheetTheme: base.bottomSheetTheme.copyWith(
       elevation: 0,
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
     ),
     dialogTheme: base.dialogTheme.copyWith(
       elevation: 0,
       backgroundColor: scheme.surface,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
     ),
   );
+}
+
+/// Lightweight brand “palette” you can use across widgets (for gradients, status colors, etc).
+@immutable
+class BrandColors extends ThemeExtension<BrandColors> {
+  const BrandColors({
+    required this.gradientStart,
+    required this.gradientEnd,
+    required this.success,
+    required this.warning,
+    required this.danger,
+  });
+
+  final Color gradientStart;
+  final Color gradientEnd;
+  final Color success;
+  final Color warning;
+  final Color danger;
+
+  @override
+  BrandColors copyWith({
+    Color? gradientStart,
+    Color? gradientEnd,
+    Color? success,
+    Color? warning,
+    Color? danger,
+  }) {
+    return BrandColors(
+      gradientStart: gradientStart ?? this.gradientStart,
+      gradientEnd: gradientEnd ?? this.gradientEnd,
+      success: success ?? this.success,
+      warning: warning ?? this.warning,
+      danger: danger ?? this.danger,
+    );
+  }
+
+  @override
+  BrandColors lerp(ThemeExtension<BrandColors>? other, double t) {
+    if (other is! BrandColors) return this;
+    return BrandColors(
+      gradientStart: Color.lerp(gradientStart, other.gradientStart, t)!,
+      gradientEnd: Color.lerp(gradientEnd, other.gradientEnd, t)!,
+      success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      danger: Color.lerp(danger, other.danger, t)!,
+    );
+    }
 }

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/theme/theme_switcher.dart';
+import 'package:gym_tracker/theme/theme.dart' show BrandColors; // for the gradient extension
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -10,6 +11,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
+    final brand = Theme.of(context).extension<BrandColors>()!;
 
     return Scaffold(
       appBar: AppBar(
@@ -24,8 +26,8 @@ class HomeScreen extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  scheme.primary.withOpacity(0.4),
-                  scheme.secondary.withOpacity(0.25),
+                  brand.gradientStart,
+                  brand.gradientEnd,
                 ],
               ),
             ),
@@ -103,6 +105,7 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
+    final brand = Theme.of(context).extension<BrandColors>()!;
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -113,9 +116,12 @@ class _StatCard extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [scheme.surfaceVariant.withOpacity(0.35), scheme.primary.withOpacity(0.12)],
+            colors: [
+              brand.gradientStart.withOpacity(0.16),
+              brand.gradientEnd.withOpacity(0.16),
+            ],
           ),
-          border: Border.all(color: scheme.outlineVariant.withOpacity(0.3)),
+          border: Border.all(color: scheme.outlineVariant.withOpacity(0.28)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
