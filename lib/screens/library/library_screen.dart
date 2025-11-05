@@ -396,7 +396,7 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
                   IconButton(
                     icon: const Icon(Icons.visibility_outlined),
                     tooltip: 'Preview',
-                    onPressed: () => _showPreview(context, name, exercises),
+                    onPressed: () => _showPreview(context, id, name, exercises),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
@@ -412,7 +412,12 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
     );
   }
 
-  void _showPreview(BuildContext context, String name, List<int> exerciseIds) {
+  void _showPreview(
+    BuildContext context,
+    int templateId,
+    String name,
+    List<int> exerciseIds,
+  ) {
     final future = () async {
       final all = await LocalStore.instance.listExercisesRaw();
       final byId = <int, Map<String, dynamic>>{
@@ -422,7 +427,10 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
       final exercises = await Future.wait(exerciseIds.map((exId) async {
         final data = byId[exId];
         final exName = (data?['name'] ?? 'Exercise #$exId').toString();
-        final history = await LocalStore.instance.listLatestSetsForExerciseRaw(exId);
+        final history = await LocalStore.instance.listLatestSetsForExerciseRaw(
+          exId,
+          templateId: templateId,
+        );
         final sets = history
             .map(
               (row) => SessionSet(
@@ -437,7 +445,7 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
       final resolvedName = name.trim().isEmpty ? 'Workout Template' : name;
       final templateNotes = exercises.isEmpty
           ? 'Template contains no exercises yet.'
-          : 'Shows the most recent logged sets for each exercise.';
+          : 'Shows the most recent logged sets for each exercise (per template when available).';
       return SessionDetail(
         id: 0,
         name: resolvedName,

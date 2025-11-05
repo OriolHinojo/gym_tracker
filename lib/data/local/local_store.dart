@@ -12,10 +12,12 @@ import 'package:path_provider/path_provider.dart';
 class LocalStore {
   LocalStore._();
   static final LocalStore instance = LocalStore._();
+  static const Object _templateIdNotSet = Object();
 
   File? _file;
   Map<String, dynamic> _db = {};
   Completer<void>? _initComp;
+  Directory? _overrideAppDir;
 
   // Notifier: emits whenever preferred_exercise_id changes (Home listens to this).
   final ValueNotifier<int?> _preferredExerciseId = ValueNotifier<int?>(null);
@@ -57,12 +59,17 @@ class LocalStore {
           } catch (_) {}
           _seedMockData();
           await _save();
-        }
       }
+    }
 
-      final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
-      final pref = settings['preferred_exercise_id'];
-      _preferredExerciseId.value = pref == null ? null : (pref as num).toInt();
+    final didEnhanceTemplates = _ensureTemplateMetadata();
+    if (didEnhanceTemplates) {
+      await _save();
+    }
+
+    final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    final pref = settings['preferred_exercise_id'];
+    _preferredExerciseId.value = pref == null ? null : (pref as num).toInt();
 
       _initComp!.complete();
     } catch (e, st) {
@@ -73,6 +80,8 @@ class LocalStore {
 
   /// Returns a writable per-app directory using path_provider.
   Future<Directory> _getAppDir() async {
+    final override = _overrideAppDir;
+    if (override != null) return override;
     final dir = await getApplicationDocumentsDirectory();
     return dir;
   }
@@ -83,6 +92,80 @@ class LocalStore {
     final tmp = File('${_file!.path}.tmp');
     await tmp.writeAsString(json.encode(_db), flush: true);
     await tmp.rename(_file!.path);
+  }
+
+  bool _ensureTemplateMetadata() {
+    bool workoutsUpdated = false;
+    bool setsUpdated = false;
+
+    final rawWorkouts = _db['workouts'];
+    final workouts = <Map<String, dynamic>>[];
+    if (rawWorkouts is List) {
+      for (final entry in rawWorkouts) {
+        if (entry is Map) {
+          final map = Map<String, dynamic>.from(entry);
+          if (!map.containsKey('template_id')) {
+            map['template_id'] = null;
+            workoutsUpdated = true;
+          } else if (map['template_id'] is num) {
+            map['template_id'] = (map['template_id'] as num).toInt();
+          }
+          workouts.add(map);
+        }
+      }
+      if (workoutsUpdated) {
+        _db['workouts'] = workouts;
+      }
+    }
+
+    final templateByWorkoutId = <int, int?>{
+      for (final map in workouts)
+        if (map['id'] != null)
+          (map['id'] as num).toInt(): (map['template_id'] as num?)?.toInt(),
+    };
+
+    final rawSets = _db['sets'];
+    if (rawSets is List) {
+      final sets = <Map<String, dynamic>>[];
+      for (final entry in rawSets) {
+        if (entry is Map) {
+          final map = Map<String, dynamic>.from(entry);
+          if (!map.containsKey('template_id')) {
+            final wid = (map['workout_id'] as num?)?.toInt();
+            map['template_id'] = templateByWorkoutId[wid];
+            setsUpdated = true;
+          } else if (map['template_id'] is num) {
+            map['template_id'] = (map['template_id'] as num).toInt();
+          }
+          sets.add(map);
+        }
+      }
+      if (setsUpdated) {
+        _db['sets'] = sets;
+      }
+    }
+
+    return workoutsUpdated || setsUpdated;
+  }
+
+  @visibleForTesting
+  void overrideAppDirectory(Directory directory) {
+    _overrideAppDir = directory;
+  }
+
+  @visibleForTesting
+  Future<void> resetForTests({bool deleteFile = false}) async {
+    final file = _file;
+    _file = null;
+    _db = {};
+    _initComp = null;
+    _preferredExerciseId.value = null;
+    _overrideAppDir = null;
+    if (deleteFile && file != null) {
+      try {
+        await file.delete(recursive: true);
+      } catch (_) {}
+    }
   }
 
   /// Seed a small mock dataset (timestamps in UTC).
@@ -109,7 +192,8 @@ class LocalStore {
       'user_id': 1,
       'name': 'Leg Day',
       'started_at': lastWeek.toIso8601String(),
-      'notes': ''
+      'notes': '',
+      'template_id': null,
     };
 
     final mondayThisWeek = _mondayOfWeek(now);
@@ -121,7 +205,8 @@ class LocalStore {
       'user_id': 1,
       'name': 'Push Day',
       'started_at': workout2Start.toIso8601String(),
-      'notes': ''
+      'notes': '',
+      'template_id': null,
     };
 
     final workout3 = {
@@ -129,7 +214,8 @@ class LocalStore {
       'user_id': 1,
       'name': 'Full Body',
       'started_at': workout3Start.toIso8601String(),
-      'notes': ''
+      'notes': '',
+      'template_id': null,
     };
 
     // Sets (ensure ordinals reflect order, weights > 0)
@@ -143,7 +229,8 @@ class LocalStore {
         'ordinal': 1,
         'reps': 5,
         'weight': 120,
-        'created_at': lastWeek.toIso8601String()
+        'created_at': lastWeek.toIso8601String(),
+        'template_id': null,
       },
       {
         'id': 2,
@@ -153,7 +240,8 @@ class LocalStore {
         'ordinal': 2,
         'reps': 3,
         'weight': 160,
-        'created_at': lastWeek.toIso8601String()
+        'created_at': lastWeek.toIso8601String(),
+        'template_id': null,
       },
 
       // workout2 (this week)
@@ -165,7 +253,8 @@ class LocalStore {
         'ordinal': 1,
         'reps': 5,
         'weight': 90,
-        'created_at': workout2Start.toIso8601String()
+        'created_at': workout2Start.toIso8601String(),
+        'template_id': null,
       },
       {
         'id': 4,
@@ -175,7 +264,8 @@ class LocalStore {
         'ordinal': 2,
         'reps': 3,
         'weight': 100,
-        'created_at': workout2Start.toIso8601String()
+        'created_at': workout2Start.toIso8601String(),
+        'template_id': null,
       },
 
       // workout3 (this week)
@@ -187,7 +277,8 @@ class LocalStore {
         'ordinal': 1,
         'reps': 5,
         'weight': 130,
-        'created_at': workout3Start.toIso8601String()
+        'created_at': workout3Start.toIso8601String(),
+        'template_id': null,
       },
       {
         'id': 6,
@@ -197,7 +288,8 @@ class LocalStore {
         'ordinal': 2,
         'reps': 2,
         'weight': 105,
-        'created_at': workout3Start.toIso8601String()
+        'created_at': workout3Start.toIso8601String(),
+        'template_id': null,
       },
     ];
 
@@ -277,12 +369,13 @@ class LocalStore {
   Future<List<Map<String, dynamic>>> listLatestSetsForExerciseRaw(
     int exerciseId, {
     int userId = 1,
+    int? templateId,
   }) async {
     await init();
     final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
     final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
 
-    final filtered = sets
+    List<Map<String, dynamic>> filtered = sets
         .where((s) {
           final exId = (s['exercise_id'] as num?)?.toInt();
           if (exId != exerciseId) return false;
@@ -299,6 +392,23 @@ class LocalStore {
         if (w['id'] != null && (w['user_id'] as num?)?.toInt() == userId)
           (w['id'] as num).toInt(): Map<String, dynamic>.from(w),
     };
+
+    if (templateId != null) {
+      final templateFiltered = filtered.where((row) {
+        final rowTemplate = (row['template_id'] as num?)?.toInt();
+        if (rowTemplate != null) return rowTemplate == templateId;
+        final wid = (row['workout_id'] as num?)?.toInt();
+        final workoutTemplate = (workoutById[wid]?['template_id'] as num?)?.toInt();
+        return workoutTemplate == templateId;
+      }).toList();
+      if (templateFiltered.isEmpty) {
+        return listLatestSetsForExerciseRaw(
+          exerciseId,
+          userId: userId,
+        );
+      }
+      filtered = templateFiltered;
+    }
 
     DateTime bestDateForWorkout(int wid) {
       final workout = workoutById[wid];
@@ -520,6 +630,7 @@ class LocalStore {
     String? notes,
     DateTime? startedAtUtc,
     required List<Map<String, dynamic>> sets,
+    Object? templateId = _templateIdNotSet,
   }) async {
     await init();
     final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
@@ -535,12 +646,16 @@ class LocalStore {
     final started = (startedAtUtc ?? existingStarted ?? DateTime.now().toUtc()).toUtc();
 
     final updatedNotes = notes ?? (existing['notes'] ?? '');
+    final bool templateProvided = templateId != _templateIdNotSet;
+    final int? updatedTemplateId =
+        templateProvided ? (templateId as int?) : (existing['template_id'] as num?)?.toInt();
 
     workouts[index] = {
       ...existing,
       'name': name,
       'notes': updatedNotes,
       'started_at': started.toIso8601String(),
+      'template_id': updatedTemplateId,
     };
 
     final allSets = List<Map<String, dynamic>>.from(_db['sets'] ?? const [])
@@ -578,6 +693,7 @@ class LocalStore {
         'reps': reps,
         'weight': weight,
         'created_at': createdAt.toIso8601String(),
+        'template_id': updatedTemplateId,
       });
     }
 
@@ -597,6 +713,7 @@ class LocalStore {
     String notes = '',
     DateTime? startedAtUtc,
     required List<Map<String, dynamic>> sets,
+    int? templateId,
   }) async {
     await init();
     final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
@@ -611,6 +728,7 @@ class LocalStore {
       'name': name,
       'started_at': started.toIso8601String(),
       'notes': notes,
+      'template_id': templateId,
     });
 
     int nextSetId = allSets.isEmpty
@@ -627,6 +745,7 @@ class LocalStore {
         'reps': (s['reps'] as num).toInt(),
         'weight': (s['weight'] as num).toDouble(),
         'created_at': (s['created_at'] as DateTime? ?? now).toIso8601String(),
+        'template_id': templateId,
       });
     }
 

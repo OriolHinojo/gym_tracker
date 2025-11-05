@@ -27,6 +27,7 @@ class _LogScreenState extends State<LogScreen> {
   int? _editingWorkoutId;
   String _editingWorkoutName = 'Workout';
   DateTime? _editingStartedAt;
+  int? _activeTemplateId;
 
   @override
   void initState() {
@@ -63,7 +64,10 @@ class _LogScreenState extends State<LogScreen> {
         (e) => (e['id'] as num).toInt() == id,
         orElse: () => const {'name': 'Unknown', 'category': 'other'},
       );
-      final history = await LocalStore.instance.listLatestSetsForExerciseRaw(id);
+      final history = await LocalStore.instance.listLatestSetsForExerciseRaw(
+        id,
+        templateId: templateId,
+      );
       final setData = _buildSetDraftsFromRaw(history, asPlaceholder: true);
       drafts.add(_ExerciseDraft(
         id: id,
@@ -84,6 +88,8 @@ class _LogScreenState extends State<LogScreen> {
       _editingWorkoutId = null;
       _editingWorkoutName = 'Workout';
       _editingStartedAt = null;
+      _activeTemplateId = templateId;
+      _running = true;
     });
   }
 
@@ -93,16 +99,13 @@ class _LogScreenState extends State<LogScreen> {
     bool usePlaceholders = false,
     bool enableEditing = false,
   }) async {
-    Map<String, dynamic>? workoutMeta;
-    if (enableEditing) {
-      workoutMeta = await LocalStore.instance.getWorkoutRaw(workoutId);
-      if (workoutMeta == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Workout not found')));
-        }
-        return;
+    final workoutMeta = await LocalStore.instance.getWorkoutRaw(workoutId);
+    if (workoutMeta == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Workout not found')));
       }
+      return;
     }
 
     final sets = await LocalStore.instance.listSetsForWorkoutRaw(workoutId);
@@ -117,6 +120,7 @@ class _LogScreenState extends State<LogScreen> {
     final exerciseMap = <int, Map<String, dynamic>>{
       for (final e in exercises) (e['id'] as num).toInt(): e,
     };
+    final templateId = (workoutMeta['template_id'] as num?)?.toInt();
 
     final grouped = <int, List<Map<String, dynamic>>>{};
     for (final raw in sets) {
@@ -160,13 +164,14 @@ class _LogScreenState extends State<LogScreen> {
         ..addAll(drafts);
       _expandedExerciseId = _exercises.isNotEmpty ? _exercises.first.id : null;
       if (markChoice || drafts.isNotEmpty) _choiceMade = true;
+      _activeTemplateId = templateId;
       if (enableEditing) {
         _editingWorkoutId = workoutId;
-        _editingWorkoutName = (workoutMeta?['name'] ?? 'Workout').toString().trim().isEmpty
+        _editingWorkoutName = (workoutMeta['name'] ?? 'Workout').toString().trim().isEmpty
             ? 'Workout'
-            : (workoutMeta?['name'] ?? 'Workout').toString();
+            : (workoutMeta['name'] ?? 'Workout').toString();
         _editingStartedAt =
-            DateTime.tryParse((workoutMeta?['started_at'] ?? '').toString())?.toUtc();
+            DateTime.tryParse((workoutMeta['started_at'] ?? '').toString())?.toUtc();
         _running = false;
       } else {
         _editingWorkoutId = null;
@@ -192,6 +197,7 @@ class _LogScreenState extends State<LogScreen> {
       _editingWorkoutId = null;
       _editingWorkoutName = 'Workout';
       _editingStartedAt = null;
+      _activeTemplateId = null;
     });
     _ticker.reset();
     _ticker.start();
@@ -680,8 +686,11 @@ class _LogScreenState extends State<LogScreen> {
                                     final ex = all.firstWhere((e) => (e['id'] as num).toInt() == id);
                                     final name = (ex['name'] ?? 'Exercise').toString();
                                     final category = (ex['category'] ?? 'other').toString();
-                                    final history =
-                                        await LocalStore.instance.listLatestSetsForExerciseRaw(id);
+                                    final history = await LocalStore.instance
+                                        .listLatestSetsForExerciseRaw(
+                                      id,
+                                      templateId: _activeTemplateId,
+                                    );
                                     final setData = _buildSetDraftsFromRaw(
                                       history,
                                       asPlaceholder: true,
@@ -790,6 +799,7 @@ class _LogScreenState extends State<LogScreen> {
         notes: null,
         startedAtUtc: _editingStartedAt,
         sets: sets,
+        templateId: _activeTemplateId,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workout updated')));
@@ -797,7 +807,12 @@ class _LogScreenState extends State<LogScreen> {
       return;
     }
 
-    await LocalStore.instance.saveWorkout(userId: 1, name: 'Workout', sets: sets);
+    await LocalStore.instance.saveWorkout(
+      userId: 1,
+      name: 'Workout',
+      sets: sets,
+      templateId: _activeTemplateId,
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workout saved')));
 
@@ -806,6 +821,7 @@ class _LogScreenState extends State<LogScreen> {
       _exercises.clear();
       _expandedExerciseId = null;
       _running = true;
+      _activeTemplateId = null;
     });
     _ticker.reset();
     _ticker.start();
