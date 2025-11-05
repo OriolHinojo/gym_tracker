@@ -2,23 +2,21 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/theme/theme_switcher.dart';
-import 'package:gym_tracker/theme/theme.dart' show BrandColors; // for the gradient extension
+import 'package:gym_tracker/theme/theme.dart' show BrandColors;
+import 'package:gym_tracker/data/local/local_store.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final brand = Theme.of(context).extension<BrandColors>()!;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('IronPulse'),
-        actions: const [
-          ThemeSwitcher(), // 🌗 toggle light/dark/system
-        ],
+        actions: const [ThemeSwitcher()],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: Container(
@@ -39,7 +37,19 @@ class HomeScreen extends StatelessWidget {
         children: [
           Text('Overview', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          const _SummaryGrid(),
+          FutureBuilder<HomeStats>(
+            future: LocalStore.instance.getHomeStats(),
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final stats = snap.data ?? HomeStats(0, 0.0, '—');
+              return _SummaryGrid(items: stats.toItems());
+            },
+          ),
           const SizedBox(height: 16),
           const _Highlights(),
         ],
@@ -54,19 +64,44 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-// ---------- Summary ----------
+// ---------- HomeStats Extension ----------
+
+extension on HomeStats {
+  List<_StatItem> toItems() => [
+        _StatItem(
+          'This Week',
+          weeklySessions.toString(),
+          'sessions',
+          Icons.calendar_today_rounded,
+          '/',
+        ),
+        _StatItem(
+          'Trend',
+          '${e1rmDelta >= 0 ? '+' : ''}$e1rmDelta',
+          'kg e1RM',
+          Icons.show_chart_rounded,
+          '/progress',
+          positive: e1rmDelta >= 0,
+        ),
+        _StatItem(
+          'Last Session',
+          lastSessionExercises,
+          null,
+          Icons.fitness_center_rounded,
+          '/log',
+          textOnly: true,
+        ),
+      ];
+}
+
+// ---------- Summary Grid ----------
 
 class _SummaryGrid extends StatelessWidget {
-  const _SummaryGrid();
+  final List<_StatItem> items;
+  const _SummaryGrid({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    final items = const [
-      _StatItem('This Week', '3', 'sessions', Icons.calendar_today_rounded, '/'),
-      _StatItem('Trend', '+2.5', 'kg e1RM', Icons.show_chart_rounded, '/progress', positive: true),
-      _StatItem('Last Session', 'Bench, Squat', null, Icons.fitness_center_rounded, '/log', textOnly: true),
-    ];
-
     return LayoutBuilder(builder: (context, c) {
       final cross = c.maxWidth >= 560 ? 3 : 1;
       return GridView.builder(
@@ -98,7 +133,7 @@ class _StatItem {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard(this.item, {super.key});
+  const _StatCard(this.item);
   final _StatItem item;
 
   @override
@@ -146,7 +181,8 @@ class _StatCard extends StatelessWidget {
                         ? Text(item.value, style: t.bodyLarge)
                         : Row(
                             children: [
-                              Text(item.value, style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                              Text(item.value,
+                                  style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
                               if (item.suffix != null) ...[
                                 const SizedBox(width: 6),
                                 Text(item.suffix!, style: t.titleSmall),
@@ -154,9 +190,13 @@ class _StatCard extends StatelessWidget {
                               if (item.positive != null) ...[
                                 const SizedBox(width: 6),
                                 Icon(
-                                  item.positive! ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                                  item.positive!
+                                      ? Icons.arrow_upward_rounded
+                                      : Icons.arrow_downward_rounded,
                                   size: 18,
-                                  color: item.positive! ? Colors.greenAccent : Colors.redAccent,
+                                  color: item.positive!
+                                      ? Colors.greenAccent
+                                      : Colors.redAccent,
                                 ),
                               ],
                             ],
@@ -199,7 +239,8 @@ class _Highlights extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(children: [
-                  Text('Highlights', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  Text('Highlights',
+                      style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
                   const Spacer(),
                   TextButton(onPressed: () {}, child: const Text('See all')),
                 ]),
