@@ -271,6 +271,67 @@ class LocalStore {
         .toList();
   }
 
+  /// Returns the sets (ordered by ordinal) from the most recent workout that
+  /// includes [exerciseId] for the given [userId].
+  Future<List<Map<String, dynamic>>> listLatestSetsForExerciseRaw(
+    int exerciseId, {
+    int userId = 1,
+  }) async {
+    await init();
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
+
+    final filtered = sets
+        .where((s) {
+          final exId = (s['exercise_id'] as num?)?.toInt();
+          if (exId != exerciseId) return false;
+          final uid = (s['user_id'] as num?)?.toInt();
+          return uid == null || uid == userId;
+        })
+        .map((s) => Map<String, dynamic>.from(s))
+        .toList();
+
+    if (filtered.isEmpty) return <Map<String, dynamic>>[];
+
+    final workoutById = <int, Map<String, dynamic>>{
+      for (final w in workouts)
+        if (w['id'] != null && (w['user_id'] as num?)?.toInt() == userId)
+          (w['id'] as num).toInt(): Map<String, dynamic>.from(w),
+    };
+
+    DateTime bestDateForWorkout(int wid) {
+      final workout = workoutById[wid];
+      final startedRaw = (workout?['started_at'] ?? '').toString();
+      final started = DateTime.tryParse(startedRaw)?.toUtc();
+      if (started != null) return started;
+
+      DateTime best = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      for (final row in filtered) {
+        if ((row['workout_id'] as num?)?.toInt() != wid) continue;
+        final created = DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc();
+        if (created != null && created.isAfter(best)) best = created;
+      }
+      return best;
+    }
+
+    final workoutIds = filtered
+        .map((s) => (s['workout_id'] as num?)?.toInt())
+        .whereType<int>()
+        .toSet()
+        .toList()
+      ..sort((a, b) => bestDateForWorkout(b).compareTo(bestDateForWorkout(a)));
+
+    if (workoutIds.isEmpty) return <Map<String, dynamic>>[];
+
+    final latestId = workoutIds.first;
+    final latest = filtered
+        .where((s) => (s['workout_id'] as num?)?.toInt() == latestId)
+        .toList()
+      ..sort((a, b) => ((a['ordinal'] as num?)?.toInt() ?? 0).compareTo((b['ordinal'] as num?)?.toInt() ?? 0));
+
+    return latest.map((s) => Map<String, dynamic>.from(s)).toList();
+  }
+
   /// Create an exercise on the fly.
   Future<int> createExercise({required String name, String category = 'other'}) async {
     await init();
