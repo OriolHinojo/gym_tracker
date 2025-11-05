@@ -16,6 +16,11 @@ class LocalStore {
   Map<String, dynamic> _db = {};
   Completer<void>? _initComp;
 
+  /// Notifier that emits whenever preferred_exercise_id changes
+  final ValueNotifier<int?> _preferredExerciseId = ValueNotifier<int?>(null);
+  /// Exposes the preferred exercise ID listenable
+  ValueListenable<int?> get preferredExerciseIdListenable => _preferredExerciseId;
+
   /// Initializes the local database file and loads it into memory.
   Future<void> init() async {
     if (_initComp != null) return _initComp!.future;
@@ -40,6 +45,7 @@ class LocalStore {
             await _save();
           } else {
             _db = (json.decode(text) as Map).cast<String, dynamic>();
+            _db.putIfAbsent('settings', () => {'preferred_exercise_id': null});
           }
         } catch (e) {
           // Backup bad file and rebuild with mock data
@@ -51,6 +57,11 @@ class LocalStore {
           await _save();
         }
       }
+
+      // === NEW: prime the notifier from settings after DB is loaded ===
+      final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+      final pref = settings['preferred_exercise_id'];
+      _preferredExerciseId.value = pref == null ? null : (pref as num).toInt();
 
       _initComp!.complete();
     } catch (e, st) {
@@ -70,7 +81,6 @@ class LocalStore {
     if (_file == null) return;
     final tmp = File('${_file!.path}.tmp');
     await tmp.writeAsString(json.encode(_db), flush: true);
-    // On most platforms rename is atomic within the same filesystem.
     await tmp.rename(_file!.path);
   }
 
@@ -192,6 +202,9 @@ class LocalStore {
 
     _db = {
       'version': 1,
+      'settings': {
+        'preferred_exercise_id': null, // user-chosen favourite exercise
+      },
       'users': [user],
       'exercises': exercises,
       'workouts': [workout1, workout2, workout3],
@@ -223,12 +236,12 @@ class LocalStore {
 
   /// Returns all sets for a given exercise ID.
   Future<List<Map<String, dynamic>>> listSetsForExerciseRaw(int exerciseId) async {
-  await init();
-  final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
-  return sets
-      .where((s) => s['exercise_id'] == exerciseId)
-      .map((s) => Map<String, dynamic>.from(s))
-      .toList();
+    await init();
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    return sets
+        .where((s) => (s['exercise_id'] as num?)?.toInt() == exerciseId)
+        .map((s) => Map<String, dynamic>.from(s))
+        .toList();
   }
 
   /// Returns a single exercise by ID.
@@ -236,17 +249,37 @@ class LocalStore {
     await init();
     final rows = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
     try {
-      return rows.firstWhere((e) => e['id'] == id);
+      return rows.firstWhere((e) => (e['id'] as num?)?.toInt() == id);
     } catch (_) {
       return null;
     }
   }
 
-  /// Returns quick summary stats for home dashboard.
+  /// Gets the preferred (favourite) exercise ID from settings.
+  Future<int?> getPreferredExerciseId() async {
+    await init();
+    final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    final id = settings['preferred_exercise_id'];
+    return id == null ? null : (id as num).toInt();
+  }
+
+  /// Sets the preferred (favourite) exercise ID in settings.
+  Future<void> setPreferredExerciseId(int? exerciseId) async {
+    await init();
+    final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    settings['preferred_exercise_id'] = exerciseId;
+    _db['settings'] = settings;
+    await _save();
+
+    // === NEW: notify listeners so Home/others can rebuild ===
+    _preferredExerciseId.value = exerciseId;
+  }
+
+  /// Computes and returns home statistics for the dashboard.
   Future<HomeStats> getHomeStats({int userId = 1}) async {
     await init();
     try {
-      // Work with UTC for consistency, then define week boundaries in UTC.
+      // Week windows (UTC)
       final nowUtc = DateTime.now().toUtc();
       final monday = _mondayOfWeek(nowUtc);
       final nextMonday = monday.add(const Duration(days: 7));
@@ -264,15 +297,34 @@ class LocalStore {
       }).toList();
       final weeklyCount = sessionsThisWeek.length;
 
-      // Average E1RM per range (Epley), filter sanity: reps 1..36, weight>0.
-      double avgE1ForRange(DateTime start, DateTime end) {
+      // Favourite exercise (prefer user-chosen, fallback to most-used)
+      final prefId = await getPreferredExerciseId();
+      _Fav fav;
+      if (prefId != null &&
+          exercises.any((e) => (e['id'] as num?)?.toInt() == prefId)) {
+        final name = (exercises.firstWhere(
+          (e) => (e['id'] as num).toInt() == prefId,
+        )['name'] ?? '').toString();
+        fav = _Fav(prefId, name.isEmpty ? null : name);
+      } else {
+        fav = _favouriteExerciseBySetCount(
+          sets: sets,
+          exercises: exercises,
+          userId: userId,
+        );
+      }
+
+      /// Average E1RM for a specific exercise id in a time range (Epley), filter sanity: reps 1..36, weight>0.
+      double _avgE1ForRangeForExercise(DateTime start, DateTime end, int exerciseId) {
         final rows = sets.where((s) {
           if (s['user_id'] != userId) return false;
           final dt = DateTime.parse(s['created_at']).toUtc();
           final reps = s['reps'] as num?;
           final weight = s['weight'] as num?;
-          if (reps == null || weight == null) return false;
+          final exIdNum = s['exercise_id'] as num?;
+          if (reps == null || weight == null || exIdNum == null) return false;
           if (reps <= 0 || reps >= 37 || weight <= 0) return false;
+          if (exIdNum.toInt() != exerciseId) return false;
           return !dt.isBefore(start) && dt.isBefore(end);
         }).toList();
 
@@ -288,9 +340,14 @@ class LocalStore {
         return sum / rows.length;
       }
 
-      final avgThis = avgE1ForRange(monday, nextMonday);
-      final avgPrev = avgE1ForRange(prevMonday, monday);
-      final delta = double.parse((avgThis - avgPrev).toStringAsFixed(2));
+      double delta = 0.0;
+      final favName = fav.name ?? '—';
+      if (fav.id != null) {
+        final favId = fav.id!;
+        final avgThis = _avgE1ForRangeForExercise(monday, nextMonday, favId);
+        final avgPrev = _avgE1ForRangeForExercise(prevMonday, monday, favId);
+        delta = double.parse((avgThis - avgPrev).toStringAsFixed(2));
+      }
 
       // Last session exercises (distinct names in most recent workout)
       final lastWorkout = (workouts.where((w) => w['user_id'] == userId).toList()
@@ -302,21 +359,56 @@ class LocalStore {
       if (lastWorkout.isNotEmpty) {
         final lw = lastWorkout.first;
         final setRows = sets.where((s) => s['workout_id'] == lw['id']).toList();
-        final exIds = setRows.map((s) => s['exercise_id'] as int).toSet();
+        final exIds = setRows.map((s) => (s['exercise_id'] as num).toInt()).toSet();
         final names = exercises
-            .where((e) => exIds.contains(e['id']))
+            .where((e) => exIds.contains((e['id'] as num).toInt()))
             .map((e) => (e['name'] ?? '').toString())
             .where((n) => n.isNotEmpty)
             .toList();
         if (names.isNotEmpty) lastNames = names.join(', ');
       }
 
-      return HomeStats(weeklyCount, delta, lastNames);
+      return HomeStats(weeklyCount, delta, lastNames, favName);
     } catch (e) {
       debugPrint('LocalStore.getHomeStats error: $e');
-      return const HomeStats(0, 0.0, '—');
+      return const HomeStats(0, 0.0, '—', '—');
     }
   }
+
+  /// Determine favourite exercise by counting sets (all time) for the user.
+  _Fav _favouriteExerciseBySetCount({
+    required List<Map<String, dynamic>> sets,
+    required List<Map<String, dynamic>> exercises,
+    required int userId,
+  }) {
+    if (sets.isEmpty) return const _Fav(null, null);
+
+    final Map<int, int> counts = {};
+    for (final s in sets) {
+      if (s['user_id'] != userId) continue;
+      final exIdNum = s['exercise_id'] as num?;
+      if (exIdNum == null) continue;
+      final exId = exIdNum.toInt();
+      counts[exId] = (counts[exId] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return const _Fav(null, null);
+
+    final favEntry = counts.entries.reduce((a, b) => a.value >= b.value ? a : b);
+    final favId = favEntry.key;
+
+    final ex = exercises.firstWhere(
+      (e) => (e['id'] as num?)?.toInt() == favId,
+      orElse: () => const {},
+    );
+    final name = (ex['name'] ?? '').toString();
+    return _Fav(favId, name.isEmpty ? null : name);
+  }
+}
+
+class _Fav {
+  final int? id;
+  final String? name;
+  const _Fav(this.id, this.name);
 }
 
 /// Simple data model for home statistics.
@@ -324,10 +416,11 @@ class HomeStats {
   final int weeklySessions;
   final double e1rmDelta;
   final String lastSessionExercises;
+  final String favouriteExercise;
 
-  const HomeStats(this.weeklySessions, this.e1rmDelta, this.lastSessionExercises);
+  const HomeStats(this.weeklySessions, this.e1rmDelta, this.lastSessionExercises, this.favouriteExercise);
 
   @override
   String toString() =>
-      'HomeStats(weeklySessions: $weeklySessions, e1rmDelta: $e1rmDelta, lastSessionExercises: $lastSessionExercises)';
+      'HomeStats(weeklySessions: $weeklySessions, e1rmDelta: $e1rmDelta, lastSessionExercises: $lastSessionExercises, favouriteExercise: $favouriteExercise)';
 }

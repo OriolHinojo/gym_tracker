@@ -37,19 +37,33 @@ class HomeScreen extends StatelessWidget {
         children: [
           Text('Overview', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
-          FutureBuilder<HomeStats>(
-            future: LocalStore.instance.getHomeStats(),
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const SizedBox(
-                  height: 120,
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              final stats = snap.data ?? HomeStats(0, 0.0, '—');
-              return _SummaryGrid(items: stats.toItems());
+
+          // === NEW: rebuild when preferred_exercise_id changes ===
+          ValueListenableBuilder<int?>(
+            valueListenable: LocalStore.instance.preferredExerciseIdListenable,
+            builder: (context, favId, _) {
+              return FutureBuilder<HomeStats>(
+                future: LocalStore.instance.getHomeStats(),
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 120,
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
+                  if (snap.hasError) {
+                    return const SizedBox(
+                      height: 120,
+                      child: Center(child: Text('Failed to load stats')),
+                    );
+                  }
+                  final stats = snap.data ?? const HomeStats(0, 0.0, '—', '—');
+                  return _SummaryGrid(items: stats.toItems());
+                },
+              );
             },
           ),
+
           const SizedBox(height: 16),
           const _Highlights(),
         ],
@@ -76,7 +90,7 @@ extension on HomeStats {
           '/',
         ),
         _StatItem(
-          'Trend',
+          'Trend — $favouriteExercise',
           '${e1rmDelta >= 0 ? '+' : ''}$e1rmDelta',
           'kg e1RM',
           Icons.show_chart_rounded,
