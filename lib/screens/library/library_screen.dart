@@ -92,8 +92,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 }
 
+/// Exercise Detail Screen
 class ExerciseDetailScreen extends StatelessWidget {
+  /// Constructor
   const ExerciseDetailScreen({super.key, required this.id});
+  /// Exercise ID
   final int id;
 
   @override
