@@ -104,7 +104,11 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
     final totalReps = sets.fold<int>(0, (sum, s) => sum + s.reps);
     final heaviest = _heaviestSet;
     final outline = Theme.of(context).colorScheme.outline;
-    final summaryStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: outline);
+    final textTheme = Theme.of(context).textTheme;
+    final summaryStyle = textTheme.bodySmall?.copyWith(color: outline);
+    final setValueStyle = textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600);
+    final setTrailingStyle = textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+    final ordinalStyle = textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700);
 
     return Card(
       child: InkWell(
@@ -165,14 +169,23 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
                               const SizedBox(height: 12),
                               for (var i = 0; i < sets.length; i++) ...[
                                 ListTile(
-                                  dense: true,
+                                  dense: false,
                                   contentPadding: EdgeInsets.zero,
                                   leading: CircleAvatar(
-                                    radius: 16,
-                                    child: Text(sets[i].ordinal.toString()),
+                                    radius: 18,
+                                    child: Text(
+                                      sets[i].ordinal.toString(),
+                                      style: ordinalStyle,
+                                    ),
                                   ),
-                                  title: Text('${_formatWeight(sets[i].weight)} kg'),
-                                  trailing: Text('${sets[i].reps} reps'),
+                                  title: Text(
+                                    '${_formatWeight(sets[i].weight)} kg',
+                                    style: setValueStyle,
+                                  ),
+                                  trailing: Text(
+                                    '${sets[i].reps} reps',
+                                    style: setTrailingStyle,
+                                  ),
                                 ),
                                 if (i != sets.length - 1) const Divider(height: 1),
                               ],
