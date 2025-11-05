@@ -359,6 +359,9 @@ class LocalStore {
     list[index] = existing;
     _db['exercises'] = list;
     await _save();
+    if (_preferredExerciseId.value == id) {
+      _preferredExerciseId.notifyListeners();
+    }
   }
 
   Future<void> deleteExercise(int id) async {

@@ -100,9 +100,9 @@ extension on HomeStats {
     return '$date · $time';
   }
 
-  String? get lastWorkoutRoute {
+  String get lastWorkoutRoute {
     final id = lastWorkoutId;
-    if (lastWorkoutName == '—' || id == null) return null;
+    if (lastWorkoutName == '—' || id == null) return '/log';
     return '/sessions/$id';
   }
 
@@ -275,7 +275,7 @@ class _StatItem {
   final String value;
   final String? suffix;
   final IconData icon;
-  final String? route;
+  final String route;
   final bool? positive;
   final bool textOnly;
   final String? subtitle;
@@ -293,7 +293,7 @@ class _StatCard extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: item.route == null ? null : () => context.go(item.route!),
+      onTap: () => context.go(item.route),
       child: Ink(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),

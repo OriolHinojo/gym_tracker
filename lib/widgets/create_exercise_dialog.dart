@@ -87,98 +87,99 @@ Future<_ExerciseDialogResult?> _showExerciseDialog(
     customCatCtrl.text = initialCategory;
   }
 
-  _ExerciseDialogResult? result;
-  await showDialog(
-    context: context,
-    builder: (dialogCtx) => StatefulBuilder(
-      builder: (dialogCtx, setDialogState) {
-        final optionStyle = Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400);
+  try {
+    return await showDialog<_ExerciseDialogResult>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (dialogCtx, setDialogState) {
+          final optionStyle =
+              Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400);
 
-        return AlertDialog(
-          title: Text(title),
-          content: SingleChildScrollView(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(dialogCtx).viewInsets.bottom),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Name'),
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: selectedCategory,
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: 'Category'),
-                    items: _exerciseCategories
-                        .map(
-                          (c) => DropdownMenuItem<String>(
-                            value: c['value'],
-                            child: Text(
-                              c['label']!,
-                              style: optionStyle,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setDialogState(() {
-                        selectedCategory = value;
-                        if (selectedCategory != 'other') {
-                          customCatCtrl.clear();
-                        }
-                      });
-                    },
-                  ),
-                  if (selectedCategory == 'other') ...[
-                    const SizedBox(height: 16),
+          return AlertDialog(
+            title: Text(title),
+            content: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(dialogCtx).viewInsets.bottom),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 360),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     TextField(
-                      controller: customCatCtrl,
-                      decoration: const InputDecoration(labelText: 'Custom category'),
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(labelText: 'Name'),
                     ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedCategory,
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Category'),
+                      items: _exerciseCategories
+                          .map(
+                            (c) => DropdownMenuItem<String>(
+                              value: c['value'],
+                              child: Text(
+                                c['label']!,
+                                style: optionStyle,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setDialogState(() {
+                          selectedCategory = value;
+                          if (selectedCategory != 'other') {
+                            customCatCtrl.clear();
+                          }
+                        });
+                      },
+                    ),
+                    if (selectedCategory == 'other') ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: customCatCtrl,
+                        decoration: const InputDecoration(labelText: 'Custom category'),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogCtx).pop(),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final name = nameCtrl.text.trim();
+                  if (name.isEmpty) return;
 
-                var category = selectedCategory;
-                if (category == 'other') {
-                  final custom = customCatCtrl.text.trim();
-                  if (custom.isNotEmpty) {
-                    category = custom;
+                  var category = selectedCategory;
+                  if (category == 'other') {
+                    final custom = customCatCtrl.text.trim();
+                    if (custom.isNotEmpty) {
+                      category = custom;
+                    }
                   }
-                }
 
-                result = _ExerciseDialogResult(name: name, category: category);
-                if (Navigator.canPop(dialogCtx)) {
-                  Navigator.pop(dialogCtx);
-                }
-              },
-              child: Text(isEditing ? 'Save' : 'Create'),
-            ),
-          ],
-        );
-      },
-    ),
-  );
-
-  nameCtrl.dispose();
-  customCatCtrl.dispose();
-  return result;
+                  Navigator.of(dialogCtx).pop(
+                    _ExerciseDialogResult(name: name, category: category),
+                  );
+                },
+                child: Text(isEditing ? 'Save' : 'Create'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  } finally {
+    await Future<void>.delayed(Duration.zero);
+    nameCtrl.dispose();
+    customCatCtrl.dispose();
+  }
 }
 
 String? _resolveCategoryValue(String? category) {
