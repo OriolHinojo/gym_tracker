@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/library/library_screen.dart';
+import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key, this.templateId, this.workoutId});
@@ -72,88 +73,128 @@ class _LogScreenState extends State<LogScreen> {
   Future<void> _addExerciseFlow() async {
     final all = await LocalStore.instance.listExercisesRaw();
     int? selectedId;
-    String? newName;
+    final TextEditingController searchController = TextEditingController();
+    String searchQuery = '';
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: StatefulBuilder(
-          builder: (ctx, setD) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                const Text('Add Exercise', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 300,
-                  child: ListView(
-                    children: [
-                      ...all.map((e) {
-                        final id = (e['id'] as num).toInt();
-                        final name = (e['name'] ?? '').toString();
-                        return RadioListTile<int>(
-                          value: id,
-                          groupValue: selectedId,
-                          onChanged: (v) => setD(() => selectedId = v),
-                          title: Text(name),
-                          secondary: const Icon(Icons.fitness_center_outlined),
-                        );
-                      }),
-                      const Divider(),
-                      const ListTile(
-                        leading: Icon(Icons.add),
-                        title: Text('Create new exercise'),
-                        subtitle: Text('Add and select immediately'),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: _NewExerciseNameField(),
-                      ),
-                    ],
-                  ),
-                ),
-                Row(
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.9,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+          child: StatefulBuilder(
+            builder: (ctx, setD) {
+              final query = searchQuery.trim().toLowerCase();
+              final filtered = all.where((e) {
+                final name = (e['name'] ?? '').toString();
+                if (query.isEmpty) return true;
+                return name.toLowerCase().contains(query);
+              }).toList();
+
+              return SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-                    const Spacer(),
-                    FilledButton(
-                      onPressed: () async {
-                        int id;
-                        String name;
-                        String category = 'other';
-                        if (selectedId != null) {
-                          id = selectedId!;
-                          final ex = all.firstWhere((e) => (e['id'] as num).toInt() == id);
-                          name = (ex['name'] ?? 'Exercise').toString();
-                          category = (ex['category'] ?? 'other').toString();
-                        } else {
-                          final newName = _NewExerciseNameField.of(ctx)?.text.trim();
-                          if (newName == null || newName.isEmpty) return;
-                          id = await LocalStore.instance.createExercise(name: newName, category: category);
-                          name = newName;
-                        }
-                        setState(() {
-                          _exercises.add(_ExerciseDraft(id: id, name: name, category: category));
-                          _expandedExerciseId = id;
-                        });
-                        if (context.mounted) Navigator.pop(ctx);
-                      },
-                      child: const Text('Add'),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Add Exercise',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: searchController,
+                        decoration: const InputDecoration(
+                          labelText: 'Search exercises',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) => setD(() => searchQuery = value),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? const Center(child: Text('No exercises found'))
+                          : ListView.builder(
+                              padding: EdgeInsets.zero,
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final e = filtered[index];
+                                final id = (e['id'] as num).toInt();
+                                final name = (e['name'] ?? '').toString();
+                                return RadioListTile<int>(
+                                  value: id,
+                                  groupValue: selectedId,
+                                  onChanged: (value) => setD(() => selectedId = value),
+                                  title: Text(name),
+                                  secondary: const Icon(Icons.fitness_center_outlined),
+                                );
+                              },
+                            ),
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.add),
+                      title: const Text('Create new exercise'),
+                      subtitle: const Text('Add and select immediately'),
+                      onTap: () async {
+                        final created = await showCreateExerciseDialog(context);
+                        if (!mounted || created == null) return;
+                        setState(() {
+                          _exercises.add(_ExerciseDraft(
+                            id: created.id,
+                            name: created.name,
+                            category: created.category,
+                          ));
+                          _expandedExerciseId = created.id;
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancel'),
+                          ),
+                          const Spacer(),
+                          FilledButton(
+                            onPressed: selectedId == null
+                                ? null
+                                : () async {
+                                    final id = selectedId!;
+                                    final ex = all.firstWhere((e) => (e['id'] as num).toInt() == id);
+                                    final name = (ex['name'] ?? 'Exercise').toString();
+                                    final category = (ex['category'] ?? 'other').toString();
+                                    setState(() {
+                                      _exercises.add(_ExerciseDraft(id: id, name: name, category: category));
+                                      _expandedExerciseId = id;
+                                    });
+                                    if (context.mounted) Navigator.pop(ctx);
+                                  },
+                            child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                   ],
                 ),
-                const SizedBox(height: 12),
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
     );
+    searchController.dispose();
   }
+
 
   Future<void> _saveAsTemplateFlow() async {
     if (_exercises.isEmpty) return;
@@ -390,42 +431,6 @@ class _SetDraft {
   final TextEditingController weight = TextEditingController();
   final TextEditingController reps = TextEditingController();
   bool done = false;
-}
-
-/* ---------------------------- Helper widget ---------------------------- */
-
-class _NewExerciseNameField extends StatefulWidget {
-  const _NewExerciseNameField({super.key});
-
-  static TextEditingController? of(BuildContext context) {
-    final _Inherited? inh = context.dependOnInheritedWidgetOfExactType<_Inherited>();
-    return inh?.controller;
-  }
-
-  @override
-  State<_NewExerciseNameField> createState() => _NewExerciseNameFieldState();
-}
-
-class _NewExerciseNameFieldState extends State<_NewExerciseNameField> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Inherited(
-      controller: _controller,
-      child: TextField(
-        controller: _controller,
-        decoration: const InputDecoration(labelText: 'New exercise name'),
-      ),
-    );
-  }
-}
-
-class _Inherited extends InheritedWidget {
-  const _Inherited({required this.controller, required super.child});
-  final TextEditingController controller;
-  @override
-  bool updateShouldNotify(covariant _Inherited oldWidget) => controller != oldWidget.controller;
 }
 
 /* --------------------------------- Ticker --------------------------------- */

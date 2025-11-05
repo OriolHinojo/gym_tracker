@@ -7,6 +7,7 @@ import 'package:gym_tracker/shared/progress_types.dart';
 import 'package:gym_tracker/widgets/progress_filters.dart';
 import 'package:gym_tracker/widgets/progress_line_chart.dart';
 import 'package:gym_tracker/widgets/progress_points_recap.dart';
+import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -65,102 +66,10 @@ class _LibraryScreenState extends State<LibraryScreen>
   }
 
   Future<void> _showCreateExerciseDialog(BuildContext context) async {
-    final nameCtrl = TextEditingController();
-    final customCatCtrl = TextEditingController();
-    const categories = <Map<String, String>>[
-      {'value': 'compound', 'label': 'Compound'},
-      {'value': 'isolation', 'label': 'Isolation'},
-      {'value': 'push', 'label': 'Push'},
-      {'value': 'pull', 'label': 'Pull'},
-      {'value': 'legs', 'label': 'Legs'},
-      {'value': 'core', 'label': 'Core'},
-      {'value': 'cardio', 'label': 'Cardio'},
-      {'value': 'mobility', 'label': 'Mobility'},
-      {'value': 'other', 'label': 'Other'},
-    ];
-    var selectedCategory = categories.first['value']!;
-    await showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (dialogCtx, setDialogState) => AlertDialog(
-          title: const Text('New Exercise'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                const SizedBox(height: 16),
-                Builder(
-                  builder: (innerCtx) {
-                    final optionStyle = Theme.of(innerCtx)
-                        .textTheme
-                        .bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w400);
-                    return DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Category'),
-                      items: categories
-                          .map(
-                            (c) => DropdownMenuItem<String>(
-                              value: c['value'],
-                              child: Text(
-                                c['label']!,
-                                style: optionStyle,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() {
-                          selectedCategory = value;
-                          if (selectedCategory != 'other') {
-                            customCatCtrl.clear();
-                          }
-                        });
-                      },
-                    );
-                  },
-                ),
-                if (selectedCategory == 'other') ...[
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: customCatCtrl,
-                    decoration: const InputDecoration(labelText: 'Custom category'),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
-                String category;
-                if (selectedCategory == 'other') {
-                  final custom = customCatCtrl.text.trim();
-                  category = custom.isEmpty ? 'other' : custom;
-                } else {
-                  category = selectedCategory;
-                }
-                await LocalStore.instance.createExercise(name: name, category: category);
-                if (context.mounted) Navigator.pop(ctx);
-                setState(() {});
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        ),
-      ),
-    );
+    final created = await showCreateExerciseDialog(context);
+    if (created != null) {
+      setState(() {});
+    }
   }
 
   Future<void> _showCreateTemplateDialog(BuildContext context) async {
