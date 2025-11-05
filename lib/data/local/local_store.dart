@@ -342,6 +342,39 @@ class LocalStore {
     await _save();
   }
 
+  /// Returns the most recent workouts for the current user (newest first).
+  Future<List<Map<String, dynamic>>> listRecentWorkoutsRaw({
+    int limit = 10,
+    int userId = 1,
+  }) async {
+    await init();
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const [])
+        .where((w) => (w['user_id'] as num?)?.toInt() == userId)
+        .toList();
+    workouts.sort((a, b) {
+      final da = DateTime.tryParse((a['started_at'] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final db = DateTime.tryParse((b['started_at'] ?? '').toString()) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return db.compareTo(da);
+    });
+    return workouts.take(limit).toList();
+  }
+
+  /// Raw set rows for a specific workout (sorted by exercise + ordinal).
+  Future<List<Map<String, dynamic>>> listSetsForWorkoutRaw(int workoutId) async {
+    await init();
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    final filtered = sets.where((s) => (s['workout_id'] as num?)?.toInt() == workoutId).toList();
+    filtered.sort((a, b) {
+      final exA = (a['exercise_id'] as num?)?.toInt() ?? 0;
+      final exB = (b['exercise_id'] as num?)?.toInt() ?? 0;
+      if (exA != exB) return exA.compareTo(exB);
+      final ordA = (a['ordinal'] as num?)?.toInt() ?? 0;
+      final ordB = (b['ordinal'] as num?)?.toInt() ?? 0;
+      return ordA.compareTo(ordB);
+    });
+    return filtered;
+  }
+
   // ----- Persist a finished workout (and its sets) -----
 
   /// Save a workout with its sets. Returns the new workout id.
