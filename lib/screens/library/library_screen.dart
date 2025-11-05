@@ -21,11 +21,21 @@ class _LibraryScreenState extends State<LibraryScreen>
   String _query = '';
   late final TabController _tab;
   int _workoutsRevision = 0;
+  int _currentTab = 0;
 
   @override
   void initState() {
     super.initState();
     _tab = TabController(length: 2, vsync: this);
+    _currentTab = _tab.index;
+    _tab.addListener(() {
+      if (!mounted) return;
+      if (_tab.index != _currentTab) {
+        setState(() {
+          _currentTab = _tab.index;
+        });
+      }
+    });
   }
 
   @override
@@ -57,7 +67,7 @@ class _LibraryScreenState extends State<LibraryScreen>
           ),
         ],
       ),
-      floatingActionButton: _tab.index == 0
+      floatingActionButton: _currentTab == 0
           ? FloatingActionButton(
               onPressed: () => _showCreateExerciseDialog(context),
               child: const Icon(Icons.add),
