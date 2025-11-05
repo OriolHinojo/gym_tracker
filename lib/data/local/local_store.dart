@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Lightweight file-backed store for a gym tracker demo.
-/// Target platforms: Android, iOS, macOS, Windows, Linux (not Web).
+/// Lightweight local JSON-based database for the gym tracker demo.
+/// Works on Android, iOS, macOS, Windows, and Linux (not Web).
 class LocalStore {
   LocalStore._();
   static final LocalStore instance = LocalStore._();
@@ -16,7 +16,7 @@ class LocalStore {
   Map<String, dynamic> _db = {};
   Completer<void>? _initComp;
 
-  /// Initialize the store lazily + race-safe.
+  /// Initializes the local database file and loads it into memory.
   Future<void> init() async {
     if (_initComp != null) return _initComp!.future;
     _initComp = Completer<void>();
@@ -31,7 +31,7 @@ class LocalStore {
       if (!await _file!.exists()) {
         await _file!.create(recursive: true);
         _seedMockData();
-        await _save(); // atomic
+        await _save();
       } else {
         try {
           final text = await _file!.readAsString();
@@ -42,14 +42,11 @@ class LocalStore {
             _db = (json.decode(text) as Map).cast<String, dynamic>();
           }
         } catch (e) {
-          // Backup the bad file, then reset with mock data.
+          // Backup bad file and rebuild with mock data
           try {
             final ts = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
-            final backup = '${_file!.path}.$ts.bak';
-            await _file!.rename(backup);
-          } catch (_) {
-            // best-effort backup
-          }
+            await _file!.rename('${_file!.path}.$ts.bak');
+          } catch (_) {}
           _seedMockData();
           await _save();
         }
@@ -62,10 +59,8 @@ class LocalStore {
     }
   }
 
-  /// Choose a proper per-app directory via path_provider.
+  /// Returns a writable per-app directory using path_provider.
   Future<Directory> _getAppDir() async {
-    // Use Application Documents (user-visible) so you can peek at the JSON if needed.
-    // For fully private data, consider getApplicationSupportDirectory().
     final dir = await getApplicationDocumentsDirectory();
     return dir;
   }
@@ -188,7 +183,7 @@ class LocalStore {
         'workout_id': 3,
         'user_id': 1,
         'exercise_id': 1,
-        'ordinal': 2, // fixed duplicate ordinal
+        'ordinal': 2,
         'reps': 2,
         'weight': 105,
         'created_at': workout3Start.toIso8601String()
@@ -206,21 +201,38 @@ class LocalStore {
     };
   }
 
-  /// Returns Monday 00:00:00 of the week for the given UTC DateTime.
+  /// Returns the Monday of the current week (UTC).
   DateTime _mondayOfWeek(DateTime utcNow) {
-    assert(utcNow.isUtc);
-    final weekday = utcNow.weekday; // Mon=1..Sun=7
+    final weekday = utcNow.weekday; // Monday = 1
     final monday = DateTime.utc(utcNow.year, utcNow.month, utcNow.day)
         .subtract(Duration(days: weekday - 1));
-    return monday; // 00:00 UTC
+    return monday;
   }
 
-  bool _inRangeInclusiveExclusive(DateTime dt, DateTime start, DateTime end) {
-    // [start, end)
-    return !dt.isBefore(start) && dt.isBefore(end);
+  // ---------------------------------------------------------------------------
+  // Public APIs for your UI
+  // ---------------------------------------------------------------------------
+
+  /// Returns all exercises from the DB.
+  Future<List<Map<String, dynamic>>> listExercisesRaw() async {
+    await init();
+    final rows = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
+    rows.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+    return rows;
   }
 
-  // Public API used by UI
+  /// Returns a single exercise by ID.
+  Future<Map<String, dynamic>?> getExerciseRaw(int id) async {
+    await init();
+    final rows = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
+    try {
+      return rows.firstWhere((e) => e['id'] == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Returns quick summary stats for home dashboard.
   Future<HomeStats> getHomeStats({int userId = 1}) async {
     await init();
     try {
@@ -238,7 +250,7 @@ class LocalStore {
       final sessionsThisWeek = workouts.where((w) {
         if (w['user_id'] != userId) return false;
         final dt = DateTime.parse(w['started_at']).toUtc();
-        return _inRangeInclusiveExclusive(dt, monday, nextMonday);
+        return !dt.isBefore(monday) && dt.isBefore(nextMonday);
       }).toList();
       final weeklyCount = sessionsThisWeek.length;
 
@@ -246,31 +258,24 @@ class LocalStore {
       double avgE1ForRange(DateTime start, DateTime end) {
         final rows = sets.where((s) {
           if (s['user_id'] != userId) return false;
-          final createdAt = DateTime.parse(s['created_at']).toUtc();
-          final repsNum = s['reps'] as num?;
-          final weightNum = s['weight'] as num?;
-          final reps = repsNum?.toInt();
-          final weight = weightNum?.toDouble();
-          final okReps = reps != null && reps >= 1 && reps <= 36;
-          final okWeight = weight != null && weight > 0;
-          return _inRangeInclusiveExclusive(createdAt, start, end) && okReps && okWeight;
+          final dt = DateTime.parse(s['created_at']).toUtc();
+          final reps = s['reps'] as num?;
+          final weight = s['weight'] as num?;
+          if (reps == null || weight == null) return false;
+          if (reps <= 0 || reps >= 37 || weight <= 0) return false;
+          return !dt.isBefore(start) && dt.isBefore(end);
         }).toList();
 
         if (rows.isEmpty) return 0.0;
-
         double sum = 0.0;
-        var count = 0;
         for (final r in rows) {
           final w = (r['weight'] as num).toDouble();
           final reps = (r['reps'] as num).toDouble();
           // Epley: 1RM ≈ w * 36 / (37 - reps)
           final e1 = w * (36.0 / (37.0 - reps));
-          if (e1.isFinite) {
-            sum += e1;
-            count++;
-          }
+          if (e1.isFinite) sum += e1;
         }
-        return count == 0 ? 0.0 : (sum / count);
+        return sum / rows.length;
       }
 
       final avgThis = avgE1ForRange(monday, nextMonday);
@@ -293,9 +298,7 @@ class LocalStore {
             .map((e) => (e['name'] ?? '').toString())
             .where((n) => n.isNotEmpty)
             .toList();
-        if (names.isNotEmpty) {
-          lastNames = names.join(', ');
-        }
+        if (names.isNotEmpty) lastNames = names.join(', ');
       }
 
       return HomeStats(weeklyCount, delta, lastNames);
@@ -306,6 +309,7 @@ class LocalStore {
   }
 }
 
+/// Simple data model for home statistics.
 class HomeStats {
   final int weeklySessions;
   final double e1rmDelta;
