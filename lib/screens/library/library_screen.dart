@@ -20,6 +20,7 @@ class _LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
   String _query = '';
   late final TabController _tab;
+  int _workoutsRevision = 0;
 
   @override
   void initState() {
@@ -50,7 +51,10 @@ class _LibraryScreenState extends State<LibraryScreen>
         controller: _tab,
         children: [
           _ExercisesTab(query: _query, onQuery: (s) => setState(() => _query = s)),
-          const _WorkoutsTab(),
+          _WorkoutsTab(
+            refreshToken: _workoutsRevision,
+            onChanged: _refreshWorkouts,
+          ),
         ],
       ),
       floatingActionButton: _tab.index == 0
@@ -63,6 +67,11 @@ class _LibraryScreenState extends State<LibraryScreen>
               child: const Icon(Icons.playlist_add),
             ),
     );
+  }
+
+  void _refreshWorkouts() {
+    if (!mounted) return;
+    setState(() => _workoutsRevision++);
   }
 
   Future<void> _showCreateExerciseDialog(BuildContext context) async {
@@ -122,7 +131,7 @@ class _LibraryScreenState extends State<LibraryScreen>
                 await LocalStore.instance
                     .createWorkoutTemplate(name: name, exerciseIds: selected.toList());
                 if (context.mounted) Navigator.pop(ctx);
-                setState(() {});
+                _refreshWorkouts();
               },
               child: const Text('Create'),
             ),
@@ -206,15 +215,48 @@ class _ExercisesTab extends StatelessWidget {
 
 /* -------------------------------- Workouts -------------------------------- */
 
-class _WorkoutsTab extends StatelessWidget {
-  const _WorkoutsTab();
+class _WorkoutsTab extends StatefulWidget {
+  const _WorkoutsTab({required this.refreshToken, required this.onChanged});
+  final int refreshToken;
+  final VoidCallback onChanged;
+
+  @override
+  State<_WorkoutsTab> createState() => _WorkoutsTabState();
+}
+
+class _WorkoutsTabState extends State<_WorkoutsTab> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _WorkoutsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshToken != oldWidget.refreshToken) {
+      _refresh();
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _load() {
+    return LocalStore.instance.listWorkoutTemplatesRaw();
+  }
+
+  void _refresh() {
+    setState(() {
+      _future = _load();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: LocalStore.instance.listWorkoutTemplatesRaw(),
+      future: _future,
       builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
@@ -234,39 +276,138 @@ class _WorkoutsTab extends StatelessWidget {
             final id = (w['id'] as num).toInt();
             final name = (w['name'] ?? '').toString();
             final List<dynamic> ids = (w['exercise_ids'] ?? []) as List<dynamic>;
+            final exercises = ids.map((e) => (e as num).toInt()).toList();
             return ListTile(
               leading: const Icon(Icons.playlist_play),
               title: Text(name),
-              subtitle: Text('Exercises: ${ids.length}'),
+              subtitle: Text('Exercises: ${exercises.length}'),
               onTap: () {
-                // Start Log with this template via go_router extra
                 context.pushNamed('log', extra: {'templateId': id});
               },
-              trailing: IconButton(
-                icon: const Icon(Icons.visibility_outlined),
-                tooltip: 'Preview',
-                onPressed: () {
-                  // Optional quick preview using a dialog
-                  showDialog(
-                    context: context,
-                    builder: (dialogCtx) => AlertDialog(
-                      title: Text(name),
-                      content:
-                          Text('Exercises: ${ids.length}\n\nTap row to start the workout.'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogCtx),
-                          child: const Text('Close'),
-                        )
-                      ],
-                    ),
-                  );
-                },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.visibility_outlined),
+                    tooltip: 'Preview',
+                    onPressed: () => _showPreview(context, name, exercises),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete',
+                    onPressed: () => _confirmDelete(context, id, name),
+                  ),
+                ],
               ),
             );
           },
         );
       },
+    );
+  }
+
+  void _showPreview(BuildContext context, String name, List<int> exerciseIds) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => FractionallySizedBox(
+        heightFactor: 0.8,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: Theme.of(ctx).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Exercises (${exerciseIds.length})', style: Theme.of(ctx).textTheme.titleMedium),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: LocalStore.instance.listExercisesRaw(),
+                    builder: (previewCtx, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error loading exercises:\n${snapshot.error}'));
+                      }
+                      final all = snapshot.data ?? [];
+                      final byId = <int, Map<String, dynamic>>{
+                        for (final item in all)
+                          if (item['id'] != null) (item['id'] as num).toInt(): item,
+                      };
+                      if (exerciseIds.isEmpty) {
+                        return const Center(child: Text('No exercises assigned yet'));
+                      }
+                      return ListView.separated(
+                        itemCount: exerciseIds.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (previewCtx, index) {
+                          final exId = exerciseIds[index];
+                          final data = byId[exId];
+                          final exName = (data?['name'] ?? 'Exercise #$exId').toString();
+                          final category = (data?['category'] ?? 'Unknown').toString();
+                          return ListTile(
+                            leading: CircleAvatar(
+                              child: Text('${index + 1}'),
+                            ),
+                            title: Text(exName),
+                            subtitle: Text('Category: $category'),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, int id, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('Delete workout'),
+        content: Text('Delete "$name"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await LocalStore.instance.deleteWorkoutTemplate(id);
+    if (!mounted) return;
+    _refresh();
+    widget.onChanged();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Deleted workout "$name"')),
     );
   }
 }
