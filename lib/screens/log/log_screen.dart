@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/library/library_screen.dart';
+import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 
 class LogScreen extends StatefulWidget {
@@ -632,12 +633,13 @@ class _LogScreenState extends State<LogScreen> {
                                 final e = filtered[index];
                                 final id = (e['id'] as num).toInt();
                                 final name = (e['name'] ?? '').toString();
+                                final category = (e['category'] ?? 'other').toString();
                                 return RadioListTile<int>(
                                   value: id,
                                   groupValue: selectedId,
                                   onChanged: (value) => setD(() => selectedId = value),
                                   title: Text(name),
-                                  secondary: const Icon(Icons.fitness_center_outlined),
+                                  secondary: Icon(exerciseCategoryIcon(category)),
                                 );
                               },
                             ),

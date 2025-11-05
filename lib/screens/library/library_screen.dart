@@ -4,6 +4,7 @@ import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/log/log_screen.dart';
 import 'package:gym_tracker/shared/progress_calculator.dart';
 import 'package:gym_tracker/shared/progress_types.dart';
+import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/widgets/progress_filters.dart';
 import 'package:gym_tracker/widgets/progress_line_chart.dart';
 import 'package:gym_tracker/widgets/progress_points_recap.dart';
@@ -203,7 +204,7 @@ class _ExercisesTab extends StatelessWidget {
                   final category = (e['category'] ?? 'Unknown').toString();
 
                   return ListTile(
-                    leading: const Icon(Icons.fitness_center_outlined),
+                    leading: Icon(exerciseCategoryIcon(category)),
                     title: Text(name),
                     subtitle: Text('Primary: $category'),
                     onTap: id == null

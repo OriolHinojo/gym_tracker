@@ -36,50 +36,53 @@ Future<CreatedExercise?> showCreateExerciseDialog(BuildContext context) async {
 
         return AlertDialog(
           title: const Text('New Exercise'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Category'),
-                  items: _exerciseCategories
-                      .map(
-                        (c) => DropdownMenuItem<String>(
-                          value: c['value'],
-                          child: Text(
-                            c['label']!,
-                            style: optionStyle,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    setDialogState(() {
-                      selectedCategory = value;
-                      if (selectedCategory != 'other') {
-                        customCatCtrl.clear();
-                      }
-                    });
-                  },
-                ),
-                if (selectedCategory == 'other') ...[
-                  const SizedBox(height: 16),
+          content: SingleChildScrollView(
+            padding: EdgeInsets.only(bottom: MediaQuery.of(dialogCtx).viewInsets.bottom),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                   TextField(
-                    controller: customCatCtrl,
-                    decoration: const InputDecoration(labelText: 'Custom category'),
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Name'),
                   ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: selectedCategory,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Category'),
+                    items: _exerciseCategories
+                        .map(
+                          (c) => DropdownMenuItem<String>(
+                            value: c['value'],
+                            child: Text(
+                              c['label']!,
+                              style: optionStyle,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() {
+                        selectedCategory = value;
+                        if (selectedCategory != 'other') {
+                          customCatCtrl.clear();
+                        }
+                      });
+                    },
+                  ),
+                  if (selectedCategory == 'other') ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: customCatCtrl,
+                      decoration: const InputDecoration(labelText: 'Custom category'),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
           actions: [
