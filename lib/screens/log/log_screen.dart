@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
@@ -24,9 +25,10 @@ class _LogScreenState extends State<LogScreen> {
   void initState() {
     super.initState();
     _ticker = Ticker((elapsed) {
-      if (!_running) return;
-      setState(() => _elapsed = elapsed);
-    })..start();
+      // Always reflect what the stopwatch says; pausing is handled inside Ticker.
+      if (mounted) setState(() => _elapsed = elapsed);
+    })
+      ..start(); // start running immediately
 
     _prefillFromTemplateIfAny();
   }
@@ -101,17 +103,14 @@ class _LogScreenState extends State<LogScreen> {
                         );
                       }),
                       const Divider(),
-                      ListTile(
-                        leading: const Icon(Icons.add),
-                        title: const Text('Create new exercise'),
-                        subtitle: const Text('Add and select immediately'),
+                      const ListTile(
+                        leading: Icon(Icons.add),
+                        title: Text('Create new exercise'),
+                        subtitle: Text('Add and select immediately'),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: TextField(
-                          decoration: const InputDecoration(labelText: 'New exercise name'),
-                          onChanged: (v) => newName = v.trim(),
-                        ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: _NewExerciseNameField(),
                       ),
                     ],
                   ),
@@ -131,9 +130,10 @@ class _LogScreenState extends State<LogScreen> {
                           name = (ex['name'] ?? 'Exercise').toString();
                           category = (ex['category'] ?? 'other').toString();
                         } else {
-                          if (newName == null || newName!.isEmpty) return;
-                          id = await LocalStore.instance.createExercise(name: newName!, category: category);
-                          name = newName!;
+                          final newName = _NewExerciseNameField.of(ctx)?.text.trim();
+                          if (newName == null || newName.isEmpty) return;
+                          id = await LocalStore.instance.createExercise(name: newName, category: category);
+                          name = newName;
                         }
                         setState(() {
                           _exercises.add(_ExerciseDraft(id: id, name: name, category: category));
@@ -191,7 +191,6 @@ class _LogScreenState extends State<LogScreen> {
     }
 
     // NOTE: Checkbox is a visual "done" marker only. We still save any set with valid numbers.
-    // If you want to only save sets marked done, add `&& s.done` in the condition below.
     final sets = <Map<String, dynamic>>[];
     for (final ex in _exercises) {
       int ord = 1;
@@ -243,7 +242,16 @@ class _LogScreenState extends State<LogScreen> {
               Chip(label: Text('Timer: $time')),
               const SizedBox(width: 8),
               IconButton(
-                onPressed: () => setState(() => _running = !_running),
+                onPressed: () {
+                  setState(() {
+                    _running = !_running;
+                    if (_running) {
+                      _ticker.start(); // resumes the stopwatch
+                    } else {
+                      _ticker.pause(); // stops the stopwatch (elapsed freezes)
+                    }
+                  });
+                },
                 icon: Icon(_running ? Icons.pause : Icons.play_arrow),
               ),
               const Spacer(),
@@ -287,11 +295,9 @@ class _LogScreenState extends State<LogScreen> {
                           icon: const Icon(Icons.history),
                         ),
                         IconButton(
-                          // CHANGED: when expanded, show SAVE icon instead of arrow; when collapsed, show edit
                           tooltip: expanded ? 'Save exercise' : 'Edit',
                           onPressed: () => setState(() {
                             if (expanded) {
-                              // could validate here; for now just collapse
                               _expandedExerciseId = null;
                             } else {
                               _expandedExerciseId = ex.id;
@@ -338,7 +344,6 @@ class _LogScreenState extends State<LogScreen> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  // Checkbox = user marks the set as "done" (purely visual; not required to save)
                                   Checkbox(value: s.done, onChanged: (v) => setState(() => s.done = v ?? false)),
                                   IconButton(
                                     tooltip: 'Delete set',
@@ -378,7 +383,7 @@ class _ExerciseDraft {
   final int id;
   final String name;
   final String category;
-  final List<_SetDraft> sets = [ _SetDraft(), _SetDraft() ];
+  final List<_SetDraft> sets = [_SetDraft(), _SetDraft()];
 }
 
 class _SetDraft {
@@ -387,21 +392,83 @@ class _SetDraft {
   bool done = false;
 }
 
+/* ---------------------------- Helper widget ---------------------------- */
+
+class _NewExerciseNameField extends StatefulWidget {
+  const _NewExerciseNameField({super.key});
+
+  static TextEditingController? of(BuildContext context) {
+    final _Inherited? inh = context.dependOnInheritedWidgetOfExactType<_Inherited>();
+    return inh?.controller;
+  }
+
+  @override
+  State<_NewExerciseNameField> createState() => _NewExerciseNameFieldState();
+}
+
+class _NewExerciseNameFieldState extends State<_NewExerciseNameField> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return _Inherited(
+      controller: _controller,
+      child: TextField(
+        controller: _controller,
+        decoration: const InputDecoration(labelText: 'New exercise name'),
+      ),
+    );
+  }
+}
+
+class _Inherited extends InheritedWidget {
+  const _Inherited({required this.controller, required super.child});
+  final TextEditingController controller;
+  @override
+  bool updateShouldNotify(covariant _Inherited oldWidget) => controller != oldWidget.controller;
+}
+
 /* --------------------------------- Ticker --------------------------------- */
 
 class Ticker {
   Ticker(this.onTick);
   final void Function(Duration) onTick;
-  Duration _elapsed = Duration.zero;
-  bool _running = false;
-  void start() { _running = true; _tick(); }
-  void dispose() { _running = false; }
+
+  final Stopwatch _sw = Stopwatch();
+  bool _loopActive = false;
+
+  /// Start or resume the stopwatch (timer keeps its previous elapsed value).
+  void start() {
+    if (!_loopActive) {
+      _loopActive = true;
+      _tick();
+    }
+    _sw.start();
+  }
+
+  /// Pause the stopwatch (elapsed time is frozen until start() is called again).
+  void pause() {
+    _sw.stop();
+  }
+
+  /// Optional: reset the stopwatch to zero and pause it.
+  void reset() {
+    _sw
+      ..reset()
+      ..stop();
+    onTick(Duration.zero);
+  }
+
+  void dispose() {
+    _loopActive = false;
+  }
+
   Future<void> _tick() async {
-    final Stopwatch sw = Stopwatch()..start();
-    while (_running) {
+    // Single loop that drives UI updates; does not accumulate time while paused,
+    // because Stopwatch doesn't advance when stopped.
+    while (_loopActive) {
       await Future<void>.delayed(const Duration(milliseconds: 200));
-      _elapsed = sw.elapsed;
-      onTick(_elapsed);
+      onTick(_sw.elapsed);
     }
   }
 }
