@@ -60,10 +60,14 @@ class _LogScreenState extends State<LogScreen> {
         (e) => (e['id'] as num).toInt() == id,
         orElse: () => const {'name': 'Unknown', 'category': 'other'},
       );
+      final history = await LocalStore.instance.listLatestSetsForExerciseRaw(id);
+      final setData = _buildSetDraftsFromRaw(history, asPlaceholder: true);
       drafts.add(_ExerciseDraft(
         id: id,
         name: (ex['name'] ?? 'Exercise').toString(),
         category: (ex['category'] ?? 'other').toString(),
+        sets: setData.drafts,
+        history: setData.history,
       ));
     }
 
@@ -77,7 +81,11 @@ class _LogScreenState extends State<LogScreen> {
     });
   }
 
-  Future<void> _loadWorkoutFromId(int workoutId, {bool markChoice = false}) async {
+  Future<void> _loadWorkoutFromId(
+    int workoutId, {
+    bool markChoice = false,
+    bool usePlaceholders = false,
+  }) async {
     final sets = await LocalStore.instance.listSetsForWorkoutRaw(workoutId);
     if (sets.isEmpty) {
       if (mounted) {
@@ -116,19 +124,13 @@ class _LogScreenState extends State<LogScreen> {
 
     final drafts = entries.map((entry) {
       final info = exerciseMap[entry.key] ?? const {'name': 'Exercise', 'category': 'other'};
-      final setDrafts = entry.value.map((set) {
-        final weight = (set['weight'] as num?)?.toString() ?? '';
-        final reps = (set['reps'] as num?)?.toString() ?? '';
-        return _SetDraft(weight: weight, reps: reps, done: true);
-      }).toList();
-      if (setDrafts.isEmpty) {
-        setDrafts.add(_SetDraft());
-      }
+      final setData = _buildSetDraftsFromRaw(entry.value, asPlaceholder: usePlaceholders);
       return _ExerciseDraft(
         id: entry.key,
         name: (info['name'] ?? 'Exercise').toString(),
         category: (info['category'] ?? 'other').toString(),
-        sets: setDrafts,
+        sets: setData.drafts,
+        history: setData.history,
       );
     }).toList();
 
@@ -208,7 +210,7 @@ class _LogScreenState extends State<LogScreen> {
     );
 
     if (selectedId == null) return;
-    await _loadWorkoutFromId(selectedId, markChoice: true);
+    await _loadWorkoutFromId(selectedId, markChoice: true, usePlaceholders: true);
   }
 
   @override
@@ -229,6 +231,60 @@ class _LogScreenState extends State<LogScreen> {
     final date = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
     final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     return '$date at $time';
+  }
+
+  String _formatNumber(num value) {
+    final double dv = value.toDouble();
+    if (dv == dv.roundToDouble()) {
+      return dv.toInt().toString();
+    }
+    final formatted = dv.toStringAsFixed(2);
+    return formatted.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+  }
+
+  _SetDraftData _buildSetDraftsFromRaw(List<Map<String, dynamic>> rawSets, {required bool asPlaceholder}) {
+    final sorted = List<Map<String, dynamic>>.from(rawSets)
+      ..sort((a, b) {
+        final ao = (a['ordinal'] as num?)?.toInt() ?? 0;
+        final bo = (b['ordinal'] as num?)?.toInt() ?? 0;
+        return ao.compareTo(bo);
+      });
+
+    final historyEntries = <_SetHistoryEntry>[];
+    for (final set in sorted) {
+      final weightVal = set['weight'] as num?;
+      final repsVal = set['reps'] as num?;
+      if (weightVal == null || repsVal == null) continue;
+      final weightStr = _formatNumber(weightVal);
+      final repsStr = _formatNumber(repsVal);
+      final ordinal = (set['ordinal'] as num?)?.toInt();
+      final effectiveOrdinal = ordinal ?? (historyEntries.isEmpty ? 1 : historyEntries.last.ordinal + 1);
+      historyEntries.add(_SetHistoryEntry(
+        ordinal: effectiveOrdinal,
+        weightHint: weightStr,
+        repsHint: repsStr,
+      ));
+    }
+
+    if (historyEntries.isEmpty) {
+      final fallbackDrafts =
+          asPlaceholder ? <_SetDraft>[_SetDraft(), _SetDraft()] : <_SetDraft>[_SetDraft()];
+      return _SetDraftData(drafts: fallbackDrafts, history: const <_SetHistoryEntry>[]);
+    }
+
+    historyEntries.sort((a, b) => a.ordinal.compareTo(b.ordinal));
+    final drafts = <_SetDraft>[];
+    for (final entry in historyEntries) {
+      drafts.add(_SetDraft(
+        weight: entry.weightHint,
+        reps: entry.repsHint,
+        weightHint: entry.weightHint,
+        repsHint: entry.repsHint,
+        done: !asPlaceholder,
+      ));
+    }
+
+    return _SetDraftData(drafts: drafts, history: historyEntries);
   }
 
   Widget _buildWorkoutBody(String time) {
@@ -326,21 +382,29 @@ class _LogScreenState extends State<LogScreen> {
                               children: <Widget>[
                                 SizedBox(width: 32, child: Center(child: Text('$i'))),
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextField(
-                                    controller: s.weight,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    decoration: const InputDecoration(labelText: 'Weight'),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: TextField(
-                                    controller: s.reps,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Reps'),
-                                  ),
-                                ),
+                        Expanded(
+                          child: TextField(
+                            controller: s.weight,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: InputDecoration(
+                              labelText: 'Weight',
+                              hintText: s.weightHint,
+                              floatingLabelBehavior: FloatingLabelBehavior.always,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: s.reps,
+                            keyboardType: TextInputType.number,
+                            decoration: InputDecoration(
+                              labelText: 'Reps',
+                              hintText: s.repsHint,
+                              floatingLabelBehavior: FloatingLabelBehavior.always,
+                            ),
+                          ),
+                        ),
                                 const SizedBox(width: 8),
                                 Checkbox(value: s.done, onChanged: (v) => setState(() => s.done = v ?? false)),
                                 IconButton(
@@ -356,7 +420,10 @@ class _LogScreenState extends State<LogScreen> {
                         Align(
                           alignment: Alignment.centerLeft,
                           child: OutlinedButton.icon(
-                            onPressed: () => setState(() => ex.sets.add(_SetDraft())),
+                            onPressed: () => setState(() {
+                              final ordinal = ex.sets.length + 1;
+                              ex.sets.add(ex.draftForOrdinal(ordinal));
+                            }),
                             icon: const Icon(Icons.add),
                             label: const Text('Add set'),
                           ),
@@ -523,8 +590,23 @@ class _LogScreenState extends State<LogScreen> {
                                     final ex = all.firstWhere((e) => (e['id'] as num).toInt() == id);
                                     final name = (ex['name'] ?? 'Exercise').toString();
                                     final category = (ex['category'] ?? 'other').toString();
+                                    final history =
+                                        await LocalStore.instance.listLatestSetsForExerciseRaw(id);
+                                    final setData = _buildSetDraftsFromRaw(
+                                      history,
+                                      asPlaceholder: true,
+                                    );
+                                    if (!mounted) return;
                                     setState(() {
-                                      _exercises.add(_ExerciseDraft(id: id, name: name, category: category));
+                                      _exercises.add(
+                                        _ExerciseDraft(
+                                          id: id,
+                                          name: name,
+                                          category: category,
+                                          sets: setData.drafts,
+                                          history: setData.history,
+                                        ),
+                                      );
                                       _expandedExerciseId = id;
                                     });
                                     if (context.mounted) Navigator.pop(ctx);
@@ -651,15 +733,54 @@ class _ExerciseDraft {
     required this.name,
     required this.category,
     List<_SetDraft>? sets,
-  }) : sets = sets ?? [_SetDraft(), _SetDraft()];
+    List<_SetHistoryEntry>? history,
+  })  : sets = sets ?? [_SetDraft(), _SetDraft()],
+        _history = _prepareHistory(history),
+        _historyByOrdinal = <int, _SetHistoryEntry>{} {
+    for (final entry in _history) {
+      _historyByOrdinal[entry.ordinal] = entry;
+    }
+  }
+
   final int id;
   final String name;
   final String category;
   final List<_SetDraft> sets;
+  final List<_SetHistoryEntry> _history;
+  final Map<int, _SetHistoryEntry> _historyByOrdinal;
+
+  static List<_SetHistoryEntry> _prepareHistory(List<_SetHistoryEntry>? source) {
+    final list = source != null ? List<_SetHistoryEntry>.from(source) : <_SetHistoryEntry>[];
+    list.sort((a, b) => a.ordinal.compareTo(b.ordinal));
+    return list;
+  }
+
+  _SetDraft draftForOrdinal(int ordinal) {
+    final exact = _historyByOrdinal[ordinal];
+    if (exact != null) {
+      return _SetDraft(
+        weight: exact.weightHint,
+        reps: exact.repsHint,
+        weightHint: exact.weightHint,
+        repsHint: exact.repsHint,
+      );
+    }
+
+    if (_history.isEmpty) {
+      return _SetDraft();
+    }
+    final fallback = _history.last;
+    return _SetDraft(
+      weight: fallback.weightHint,
+      reps: fallback.repsHint,
+      weightHint: fallback.weightHint,
+      repsHint: fallback.repsHint,
+    );
+  }
 }
 
 class _SetDraft {
-  _SetDraft({String? weight, String? reps, this.done = false}) {
+  _SetDraft({String? weight, String? reps, this.weightHint, this.repsHint, this.done = false}) {
     if (weight != null && weight.isNotEmpty) {
       this.weight.text = weight;
     }
@@ -670,7 +791,28 @@ class _SetDraft {
 
   final TextEditingController weight = TextEditingController();
   final TextEditingController reps = TextEditingController();
+  final String? weightHint;
+  final String? repsHint;
   bool done;
+}
+
+class _SetHistoryEntry {
+  const _SetHistoryEntry({
+    required this.ordinal,
+    this.weightHint,
+    this.repsHint,
+  });
+
+  final int ordinal;
+  final String? weightHint;
+  final String? repsHint;
+}
+
+class _SetDraftData {
+  _SetDraftData({required this.drafts, required this.history});
+
+  final List<_SetDraft> drafts;
+  final List<_SetHistoryEntry> history;
 }
 
 /* --------------------------------- Ticker --------------------------------- */
