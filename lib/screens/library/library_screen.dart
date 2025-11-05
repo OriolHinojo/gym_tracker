@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/log/log_screen.dart';
+import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/shared/progress_calculator.dart';
 import 'package:gym_tracker/shared/progress_types.dart';
-import 'package:gym_tracker/shared/exercise_category_icons.dart';
+import 'package:gym_tracker/shared/session_detail.dart';
+import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 import 'package:gym_tracker/widgets/progress_filters.dart';
 import 'package:gym_tracker/widgets/progress_line_chart.dart';
 import 'package:gym_tracker/widgets/progress_points_recap.dart';
-import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
+import 'package:gym_tracker/widgets/session_preview_sheet.dart';
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -411,77 +413,33 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
   }
 
   void _showPreview(BuildContext context, String name, List<int> exerciseIds) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => FractionallySizedBox(
-        heightFactor: 0.8,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        name,
-                        style: Theme.of(ctx).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text('Exercises (${exerciseIds.length})', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: FutureBuilder<List<Map<String, dynamic>>>(
-                    future: LocalStore.instance.listExercisesRaw(),
-                    builder: (previewCtx, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      if (snapshot.hasError) {
-                        return Center(child: Text('Error loading exercises:\n${snapshot.error}'));
-                      }
-                      final all = snapshot.data ?? [];
-                      final byId = <int, Map<String, dynamic>>{
-                        for (final item in all)
-                          if (item['id'] != null) (item['id'] as num).toInt(): item,
-                      };
-                      if (exerciseIds.isEmpty) {
-                        return const Center(child: Text('No exercises assigned yet'));
-                      }
-                      return ListView.separated(
-                        itemCount: exerciseIds.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (previewCtx, index) {
-                          final exId = exerciseIds[index];
-                          final data = byId[exId];
-                          final exName = (data?['name'] ?? 'Exercise #$exId').toString();
-                          final category = (data?['category'] ?? 'Unknown').toString();
-                          return ListTile(
-                            leading: CircleAvatar(
-                              child: Text('${index + 1}'),
-                            ),
-                            title: Text(exName),
-                            subtitle: Text('Category: $category'),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    final future = () async {
+      final all = await LocalStore.instance.listExercisesRaw();
+      final byId = <int, Map<String, dynamic>>{
+        for (final item in all)
+          if (item['id'] != null) (item['id'] as num).toInt(): item,
+      };
+      final exercises = exerciseIds.map((exId) {
+        final data = byId[exId];
+        final exName = (data?['name'] ?? 'Exercise #$exId').toString();
+        return SessionExercise(name: exName, sets: const []);
+      }).toList();
+      final resolvedName = name.trim().isEmpty ? 'Workout Template' : name;
+      return SessionDetail(
+        id: 0,
+        name: resolvedName,
+        startedAt: null,
+        notes: exercises.isEmpty ? 'Template contains no exercises yet.' : 'Preview of template exercises.',
+        exercises: exercises,
+      );
+    }();
+
+    final resolvedName = name.trim().isEmpty ? 'Workout Template' : name;
+    showSessionPreviewSheet(
+      context,
+      sessionFuture: future,
+      title: resolvedName,
+      subtitle: 'Template preview',
     );
   }
 

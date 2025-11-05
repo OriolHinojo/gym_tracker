@@ -2,8 +2,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:gym_tracker/theme/theme.dart' show BrandColors;
 import 'package:gym_tracker/data/local/local_store.dart';
+import 'package:gym_tracker/shared/session_detail.dart';
+import 'package:gym_tracker/theme/theme.dart' show BrandColors;
+import 'package:gym_tracker/widgets/session_preview_sheet.dart';
 
 /// Home Screen
 class HomeScreen extends StatelessWidget {
@@ -220,7 +222,24 @@ class _RecentSessionsCard extends StatelessWidget {
           dense: true,
           title: Text(name, style: textTheme.bodyLarge),
           subtitle: Text(_formatTimestamp(started), style: textTheme.bodySmall),
-          trailing: Icon(Icons.chevron_right_rounded, color: scheme.outline),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.visibility_outlined),
+                tooltip: 'Preview',
+                onPressed: () {
+                  final title = name.isEmpty ? 'Session Preview' : name;
+                  showSessionPreviewSheet(
+                    context,
+                    sessionFuture: loadSessionDetail(id),
+                    title: title,
+                  );
+                },
+              ),
+              Icon(Icons.chevron_right_rounded, color: scheme.outline),
+            ],
+          ),
           onTap: () => context.go('/sessions/$id'),
         ),
       );
