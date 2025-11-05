@@ -272,10 +272,16 @@ class _WorkoutsTab extends StatelessWidget {
                   // Optional quick preview using a dialog
                   showDialog(
                     context: context,
-                    builder: (_) => AlertDialog(
+                    builder: (dialogCtx) => AlertDialog(
                       title: Text(name),
-                      content: Text('Exercises: ${ids.length}\n\nTap row to start the workout.'),
-                      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+                      content:
+                          Text('Exercises: ${ids.length}\n\nTap row to start the workout.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogCtx),
+                          child: const Text('Close'),
+                        )
+                      ],
                     ),
                   );
                 },
