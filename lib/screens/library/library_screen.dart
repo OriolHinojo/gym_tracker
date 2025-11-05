@@ -419,17 +419,30 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
         for (final item in all)
           if (item['id'] != null) (item['id'] as num).toInt(): item,
       };
-      final exercises = exerciseIds.map((exId) {
+      final exercises = await Future.wait(exerciseIds.map((exId) async {
         final data = byId[exId];
         final exName = (data?['name'] ?? 'Exercise #$exId').toString();
-        return SessionExercise(name: exName, sets: const []);
-      }).toList();
+        final history = await LocalStore.instance.listLatestSetsForExerciseRaw(exId);
+        final sets = history
+            .map(
+              (row) => SessionSet(
+                ordinal: (row['ordinal'] as num?)?.toInt() ?? 0,
+                reps: (row['reps'] as num?)?.toInt() ?? 0,
+                weight: (row['weight'] as num?)?.toDouble() ?? 0,
+              ),
+            )
+            .toList();
+        return SessionExercise(name: exName, sets: sets);
+      }));
       final resolvedName = name.trim().isEmpty ? 'Workout Template' : name;
+      final templateNotes = exercises.isEmpty
+          ? 'Template contains no exercises yet.'
+          : 'Shows the most recent logged sets for each exercise.';
       return SessionDetail(
         id: 0,
         name: resolvedName,
         startedAt: null,
-        notes: exercises.isEmpty ? 'Template contains no exercises yet.' : 'Preview of template exercises.',
+        notes: templateNotes,
         exercises: exercises,
       );
     }();
