@@ -71,12 +71,22 @@ class _LibraryScreenState extends State<LibraryScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('New Exercise'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Name')),
-            TextField(controller: catCtrl, decoration: const InputDecoration(labelText: 'Category')),
-          ],
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: catCtrl,
+                decoration: const InputDecoration(labelText: 'Category'),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
