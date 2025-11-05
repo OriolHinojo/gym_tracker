@@ -47,7 +47,7 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
             GoRoute(
               path: '/library/exercise/:id',
               name: 'exerciseDetail',
-              builder: (context, state) => ExerciseDetailScreen(id: state.pathParameters['id']!),
+              builder: (context, state) => ExerciseDetailScreen(id: int.parse(state.pathParameters['id']!)),
             ),
           ]),
           StatefulShellBranch(routes: <RouteBase>[
