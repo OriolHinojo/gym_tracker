@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/library/library_screen.dart';
 import 'screens/log/log_screen.dart';
+import 'screens/log/workout_detail_screen.dart';
 import 'screens/more/more_screen.dart';
 import 'screens/progress/progress_screen.dart';
 
@@ -62,17 +63,22 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
             ),
           ]),
           StatefulShellBranch(routes: <RouteBase>[
-            // IMPORTANT: pass templateId from state.extra when present
             GoRoute(
               path: '/log',
               name: 'log',
               builder: (context, state) {
                 final extra = state.extra;
                 int? templateId;
-                if (extra is Map && extra['templateId'] is int) {
-                  templateId = extra['templateId'] as int;
+                int? editWorkoutId;
+                if (extra is Map) {
+                  if (extra['templateId'] is int) {
+                    templateId = extra['templateId'] as int;
+                  }
+                  if (extra['editWorkoutId'] is int) {
+                    editWorkoutId = extra['editWorkoutId'] as int;
+                  }
                 }
-                return LogScreen(templateId: templateId);
+                return LogScreen(templateId: templateId, editWorkoutId: editWorkoutId);
               },
             ),
           ]),
@@ -104,6 +110,12 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
             ),
           ]),
         ],
+      ),
+      GoRoute(
+        path: '/sessions/:id',
+        name: 'sessionDetail',
+        builder: (context, state) =>
+            WorkoutDetailScreen(id: int.parse(state.pathParameters['id']!)),
       ),
       // Keep deep link to open an existing workout id (optional)
       GoRoute(

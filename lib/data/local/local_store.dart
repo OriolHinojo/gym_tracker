@@ -1,3 +1,4 @@
+// local_store.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -436,6 +437,100 @@ class LocalStore {
     return filtered;
   }
 
+  Future<Map<String, dynamic>?> getWorkoutRaw(int workoutId) async {
+    await init();
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
+    try {
+      final row = workouts.firstWhere((w) => (w['id'] as num?)?.toInt() == workoutId);
+      return Map<String, dynamic>.from(row);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> deleteWorkout(int workoutId) async {
+    await init();
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const [])
+      ..removeWhere((w) => (w['id'] as num?)?.toInt() == workoutId);
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const [])
+      ..removeWhere((s) => (s['workout_id'] as num?)?.toInt() == workoutId);
+    _db['workouts'] = workouts;
+    _db['sets'] = sets;
+    await _save();
+  }
+
+  Future<void> updateWorkout({
+    required int workoutId,
+    required String name,
+    String? notes,
+    DateTime? startedAtUtc,
+    required List<Map<String, dynamic>> sets,
+  }) async {
+    await init();
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
+    final index = workouts.indexWhere((w) => (w['id'] as num?)?.toInt() == workoutId);
+    if (index == -1) {
+      throw ArgumentError.value(workoutId, 'workoutId', 'Workout not found');
+    }
+
+    final existing = Map<String, dynamic>.from(workouts[index]);
+    final userId = (existing['user_id'] as num?)?.toInt() ?? 1;
+    final existingStarted =
+        DateTime.tryParse((existing['started_at'] ?? '').toString())?.toUtc();
+    final started = (startedAtUtc ?? existingStarted ?? DateTime.now().toUtc()).toUtc();
+
+    final updatedNotes = notes ?? (existing['notes'] ?? '');
+
+    workouts[index] = {
+      ...existing,
+      'name': name,
+      'notes': updatedNotes,
+      'started_at': started.toIso8601String(),
+    };
+
+    final allSets = List<Map<String, dynamic>>.from(_db['sets'] ?? const [])
+      ..removeWhere((s) => (s['workout_id'] as num?)?.toInt() == workoutId);
+
+    int nextSetId = allSets.isEmpty
+        ? 1
+        : (allSets
+                .map((e) => (e['id'] as num?)?.toInt() ?? 0)
+                .reduce((a, b) => a > b ? a : b) +
+            1);
+
+    DateTime _resolveCreatedAt(dynamic value) {
+      if (value is DateTime) return value.toUtc();
+      if (value is String) {
+        final parsed = DateTime.tryParse(value)?.toUtc();
+        if (parsed != null) return parsed;
+      }
+      return started;
+    }
+
+    for (final s in sets) {
+      final exerciseId = (s['exercise_id'] as num?)?.toInt();
+      final ordinal = (s['ordinal'] as num?)?.toInt();
+      final reps = (s['reps'] as num?)?.toInt();
+      final weight = (s['weight'] as num?)?.toDouble();
+      if (exerciseId == null || ordinal == null || reps == null || weight == null) continue;
+      final createdAt = _resolveCreatedAt(s['created_at']);
+      allSets.add({
+        'id': nextSetId++,
+        'workout_id': workoutId,
+        'user_id': userId,
+        'exercise_id': exerciseId,
+        'ordinal': ordinal,
+        'reps': reps,
+        'weight': weight,
+        'created_at': createdAt.toIso8601String(),
+      });
+    }
+
+    _db['workouts'] = workouts;
+    _db['sets'] = allSets;
+    await _save();
+  }
+
   // ----- Persist a finished workout (and its sets) -----
 
   /// Save a workout with its sets. Returns the new workout id.
@@ -559,29 +654,25 @@ class LocalStore {
         delta = double.parse((avgThis - avgPrev).toStringAsFixed(2));
       }
 
-      // Last session exercises
+      // Last workout (name + start time)
       final lastWorkout = (workouts.where((w) => w['user_id'] == userId).toList()
         ..sort((a, b) => DateTime.parse(b['started_at'])
             .toUtc()
             .compareTo(DateTime.parse(a['started_at']).toUtc())));
 
-      String lastNames = '—';
+      String lastWorkoutName = '—';
+      DateTime? lastWorkoutStartedAt;
       if (lastWorkout.isNotEmpty) {
         final lw = lastWorkout.first;
-        final setRows = sets.where((s) => s['workout_id'] == lw['id']).toList();
-        final exIds = setRows.map((s) => (s['exercise_id'] as num).toInt()).toSet();
-        final names = exercises
-            .where((e) => exIds.contains((e['id'] as num).toInt()))
-            .map((e) => (e['name'] ?? '').toString())
-            .where((n) => n.isNotEmpty)
-            .toList();
-        if (names.isNotEmpty) lastNames = names.join(', ');
+        lastWorkoutName = (lw['name'] ?? 'Workout').toString();
+        lastWorkoutStartedAt =
+            DateTime.tryParse((lw['started_at'] ?? '').toString())?.toUtc();
       }
 
-      return HomeStats(weeklyCount, delta, lastNames, favName);
+      return HomeStats(weeklyCount, delta, lastWorkoutName, lastWorkoutStartedAt, favName);
     } catch (e) {
       debugPrint('LocalStore.getHomeStats error: $e');
-      return const HomeStats(0, 0.0, '—', '—');
+      return const HomeStats(0, 0.0, '—', null, '—');
     }
   }
 
@@ -625,12 +716,19 @@ class _Fav {
 class HomeStats {
   final int weeklySessions;
   final double e1rmDelta;
-  final String lastSessionExercises;
+  final String lastWorkoutName;
+  final DateTime? lastWorkoutStartedAt;
   final String favouriteExercise;
 
-  const HomeStats(this.weeklySessions, this.e1rmDelta, this.lastSessionExercises, this.favouriteExercise);
+  const HomeStats(
+    this.weeklySessions,
+    this.e1rmDelta,
+    this.lastWorkoutName,
+    this.lastWorkoutStartedAt,
+    this.favouriteExercise,
+  );
 
   @override
   String toString() =>
-      'HomeStats(weeklySessions: $weeklySessions, e1rmDelta: $e1rmDelta, lastSessionExercises: $lastSessionExercises, favouriteExercise: $favouriteExercise)';
+      'HomeStats(weeklySessions: $weeklySessions, e1rmDelta: $e1rmDelta, lastWorkoutName: $lastWorkoutName, lastWorkoutStartedAt: $lastWorkoutStartedAt, favouriteExercise: $favouriteExercise)';
 }

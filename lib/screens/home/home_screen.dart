@@ -1,3 +1,4 @@
+// HomeScreen.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -38,7 +39,7 @@ class HomeScreen extends StatelessWidget {
           Text('Overview', style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
 
-          // === NEW: rebuild when preferred_exercise_id changes ===
+          // === Rebuild when preferred_exercise_id changes ===
           ValueListenableBuilder<int?>(
             valueListenable: LocalStore.instance.preferredExerciseIdListenable,
             builder: (context, favId, _) {
@@ -57,13 +58,15 @@ class HomeScreen extends StatelessWidget {
                       child: Center(child: Text('Failed to load stats')),
                     );
                   }
-                  final stats = snap.data ?? const HomeStats(0, 0.0, '—', '—');
+                  final stats = snap.data ?? const HomeStats(0, 0.0, '—', null, '—');
                   return _SummaryGrid(items: stats.toItems());
                 },
               );
             },
           ),
 
+          const SizedBox(height: 16),
+          const _RecentSessionsCard(),
           const SizedBox(height: 16),
           const _Highlights(),
         ],
@@ -81,6 +84,16 @@ class HomeScreen extends StatelessWidget {
 // ---------- HomeStats Extension ----------
 
 extension on HomeStats {
+  String get lastWorkoutDisplay {
+    if (lastWorkoutName == '—') return '—';
+    if (lastWorkoutStartedAt == null) return lastWorkoutName;
+    final dt = lastWorkoutStartedAt!.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final date = '${dt.year}-${two(dt.month)}-${two(dt.day)}';
+    final time = '${two(dt.hour)}:${two(dt.minute)}';
+    return '$lastWorkoutName — $date $time';
+  }
+
   List<_StatItem> toItems() => [
         _StatItem(
           'This Week',
@@ -99,13 +112,121 @@ extension on HomeStats {
         ),
         _StatItem(
           'Last Session',
-          lastSessionExercises,
+          lastWorkoutDisplay,
           null,
           Icons.fitness_center_rounded,
           '/log',
           textOnly: true,
         ),
       ];
+}
+
+// ---------- Recent Sessions ----------
+
+class _RecentSessionsCard extends StatelessWidget {
+  const _RecentSessionsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: LocalStore.instance.listRecentWorkoutsRaw(limit: 5),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+          return Card(
+            child: SizedBox(
+              height: 140,
+              child: Center(
+                child: CircularProgressIndicator(color: scheme.primary),
+              ),
+            ),
+          );
+        }
+        if (snap.hasError) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Could not load recent sessions.',
+                style: textTheme.bodyMedium,
+              ),
+            ),
+          );
+        }
+
+        final sessions = (snap.data ?? const <Map<String, dynamic>>[])
+            .where((s) => s['id'] != null)
+            .toList();
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recent Sessions',
+                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 12),
+                if (sessions.isEmpty)
+                  Text(
+                    'Log a workout to see it listed here.',
+                    style: textTheme.bodyMedium,
+                  )
+                else
+                  ..._buildSessionTiles(context, sessions, scheme, textTheme),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildSessionTiles(
+    BuildContext context,
+    List<Map<String, dynamic>> sessions,
+    ColorScheme scheme,
+    TextTheme textTheme,
+  ) {
+    final tiles = <Widget>[];
+    for (int i = 0; i < sessions.length; i++) {
+      final workout = sessions[i];
+      final id = (workout['id'] as num).toInt();
+      final name = (workout['name'] ?? '').toString().trim().isEmpty
+          ? 'Workout'
+          : (workout['name'] ?? '').toString();
+      final started = (workout['started_at'] ?? '').toString();
+
+      tiles.add(
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          dense: true,
+          title: Text(name, style: textTheme.bodyLarge),
+          subtitle: Text(_formatTimestamp(started), style: textTheme.bodySmall),
+          trailing: Icon(Icons.chevron_right_rounded, color: scheme.outline),
+          onTap: () => context.go('/sessions/$id'),
+        ),
+      );
+
+      if (i < sessions.length - 1) {
+        tiles.add(const Divider(height: 1));
+      }
+    }
+    return tiles;
+  }
+
+  String _formatTimestamp(String iso) {
+    final dt = DateTime.tryParse(iso)?.toLocal();
+    if (dt == null) return 'Unknown date';
+    String two(int n) => n.toString().padLeft(2, '0');
+    final date = '${dt.year}-${two(dt.month)}-${two(dt.day)}';
+    final time = '${two(dt.hour)}:${two(dt.minute)}';
+    return '$date · $time';
+  }
 }
 
 // ---------- Summary Grid ----------

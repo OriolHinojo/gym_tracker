@@ -6,9 +6,10 @@ import 'package:gym_tracker/screens/library/library_screen.dart';
 import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 
 class LogScreen extends StatefulWidget {
-  const LogScreen({super.key, this.templateId, this.workoutId});
+  const LogScreen({super.key, this.templateId, this.workoutId, this.editWorkoutId});
   final int? templateId; // when repeating a template (passed via go_router extra)
   final String? workoutId; // optional deep link '/workout/:id'
+  final int? editWorkoutId; // when opening from session detail for editing
 
   @override
   State<LogScreen> createState() => _LogScreenState();
@@ -22,6 +23,9 @@ class _LogScreenState extends State<LogScreen> {
   final List<_ExerciseDraft> _exercises = [];
   int? _expandedExerciseId;
   bool _choiceMade = false;
+  int? _editingWorkoutId;
+  String _editingWorkoutName = 'Workout';
+  DateTime? _editingStartedAt;
 
   @override
   void initState() {
@@ -40,11 +44,9 @@ class _LogScreenState extends State<LogScreen> {
       await _applyTemplate(widget.templateId!);
       return;
     }
-    if (widget.workoutId != null) {
-      final id = int.tryParse(widget.workoutId!);
-      if (id != null) {
-        await _loadWorkoutFromId(id, markChoice: true);
-      }
+    final editId = widget.editWorkoutId ?? int.tryParse(widget.workoutId ?? '');
+    if (editId != null) {
+      await _loadWorkoutFromId(editId, markChoice: true, enableEditing: true);
     }
   }
 
@@ -78,6 +80,9 @@ class _LogScreenState extends State<LogScreen> {
         ..addAll(drafts);
       _expandedExerciseId = _exercises.isNotEmpty ? _exercises.first.id : null;
       _choiceMade = true;
+      _editingWorkoutId = null;
+      _editingWorkoutName = 'Workout';
+      _editingStartedAt = null;
     });
   }
 
@@ -85,7 +90,20 @@ class _LogScreenState extends State<LogScreen> {
     int workoutId, {
     bool markChoice = false,
     bool usePlaceholders = false,
+    bool enableEditing = false,
   }) async {
+    Map<String, dynamic>? workoutMeta;
+    if (enableEditing) {
+      workoutMeta = await LocalStore.instance.getWorkoutRaw(workoutId);
+      if (workoutMeta == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Workout not found')));
+        }
+        return;
+      }
+    }
+
     final sets = await LocalStore.instance.listSetsForWorkoutRaw(workoutId);
     if (sets.isEmpty) {
       if (mounted) {
@@ -141,10 +159,27 @@ class _LogScreenState extends State<LogScreen> {
         ..addAll(drafts);
       _expandedExerciseId = _exercises.isNotEmpty ? _exercises.first.id : null;
       if (markChoice || drafts.isNotEmpty) _choiceMade = true;
-      _running = true;
+      if (enableEditing) {
+        _editingWorkoutId = workoutId;
+        _editingWorkoutName = (workoutMeta?['name'] ?? 'Workout').toString().trim().isEmpty
+            ? 'Workout'
+            : (workoutMeta?['name'] ?? 'Workout').toString();
+        _editingStartedAt =
+            DateTime.tryParse((workoutMeta?['started_at'] ?? '').toString())?.toUtc();
+        _running = false;
+      } else {
+        _editingWorkoutId = null;
+        _editingWorkoutName = 'Workout';
+        _editingStartedAt = null;
+        _running = true;
+      }
     });
-    _ticker.reset();
-    _ticker.start();
+    if (enableEditing) {
+      _ticker.pause();
+    } else {
+      _ticker.reset();
+      _ticker.start();
+    }
   }
 
   void _startNewWorkout() {
@@ -153,6 +188,9 @@ class _LogScreenState extends State<LogScreen> {
       _exercises.clear();
       _expandedExerciseId = null;
       _running = true;
+      _editingWorkoutId = null;
+      _editingWorkoutName = 'Workout';
+      _editingStartedAt = null;
     });
     _ticker.reset();
     _ticker.start();
@@ -251,6 +289,7 @@ class _LogScreenState extends State<LogScreen> {
       });
 
     final historyEntries = <_SetHistoryEntry>[];
+    final Map<int, DateTime?> createdByOrdinal = {};
     for (final set in sorted) {
       final weightVal = set['weight'] as num?;
       final repsVal = set['reps'] as num?;
@@ -264,6 +303,8 @@ class _LogScreenState extends State<LogScreen> {
         weightHint: weightStr,
         repsHint: repsStr,
       ));
+      createdByOrdinal[effectiveOrdinal] =
+          DateTime.tryParse((set['created_at'] ?? '').toString())?.toUtc();
     }
 
     if (historyEntries.isEmpty) {
@@ -275,12 +316,14 @@ class _LogScreenState extends State<LogScreen> {
     historyEntries.sort((a, b) => a.ordinal.compareTo(b.ordinal));
     final drafts = <_SetDraft>[];
     for (final entry in historyEntries) {
+      final createdAt = createdByOrdinal[entry.ordinal];
       drafts.add(_SetDraft(
         weight: entry.weightHint,
         reps: entry.repsHint,
         weightHint: entry.weightHint,
         repsHint: entry.repsHint,
         done: !asPlaceholder,
+        originalTimestamp: asPlaceholder ? null : createdAt,
       ));
     }
 
@@ -288,9 +331,44 @@ class _LogScreenState extends State<LogScreen> {
   }
 
   Widget _buildWorkoutBody(String time) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: <Widget>[
+    final editing = _editingWorkoutId != null;
+    final textTheme = Theme.of(context).textTheme;
+    final children = <Widget>[];
+
+    if (editing) {
+      final started = _editingStartedAt?.toLocal();
+      String subtitle;
+      if (started == null) {
+        subtitle = 'Review your logged sets below';
+      } else {
+        String two(int n) => n.toString().padLeft(2, '0');
+        subtitle =
+            'Started ${started.year}-${two(started.month)}-${two(started.day)} at ${two(started.hour)}:${two(started.minute)}';
+      }
+      children.add(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Editing workout', style: textTheme.titleSmall),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: textTheme.bodySmall),
+                ],
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _addExerciseFlow,
+              icon: const Icon(Icons.add),
+              label: const Text('Add exercise'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      children.add(
         Row(
           children: <Widget>[
             Chip(label: Text('Timer: $time')),
@@ -300,9 +378,9 @@ class _LogScreenState extends State<LogScreen> {
                 setState(() {
                   _running = !_running;
                   if (_running) {
-                    _ticker.start(); // resumes the stopwatch
+                    _ticker.start();
                   } else {
-                    _ticker.pause(); // stops the stopwatch (elapsed freezes)
+                    _ticker.pause();
                   }
                 });
               },
@@ -316,126 +394,136 @@ class _LogScreenState extends State<LogScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+      );
+    }
 
-        if (_exercises.isEmpty)
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('No exercises yet'),
-              subtitle: const Text('Add from Library or create on the fly'),
-              trailing: FilledButton(onPressed: _addExerciseFlow, child: const Text('Add')),
-            ),
+    children.add(const SizedBox(height: 12));
+
+    if (_exercises.isEmpty) {
+      children.add(
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('No exercises yet'),
+            subtitle: const Text('Add from Library or create on the fly'),
+            trailing: FilledButton(onPressed: _addExerciseFlow, child: const Text('Add')),
           ),
+        ),
+      );
+    }
 
-        ..._exercises.map((ex) {
-          final expanded = _expandedExerciseId == ex.id;
-          return Card(
-            child: Column(
-              children: [
-                ListTile(
-                  title: Text(ex.name),
-                  subtitle: Text(ex.category),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        tooltip: 'History',
-                        onPressed: () {
-                          Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => ExerciseDetailScreen(id: ex.id),
-                          ));
-                        },
-                        icon: const Icon(Icons.history),
-                      ),
-                      IconButton(
-                        tooltip: expanded ? 'Save exercise' : 'Edit',
-                        onPressed: () => setState(() {
-                          if (expanded) {
-                            _expandedExerciseId = null;
-                          } else {
-                            _expandedExerciseId = ex.id;
-                          }
-                        }),
-                        icon: Icon(expanded ? Icons.save_outlined : Icons.edit),
-                      ),
-                      IconButton(
-                        tooltip: 'Remove',
-                        onPressed: () => setState(() => _exercises.removeWhere((e) => e.id == ex.id)),
-                        icon: const Icon(Icons.delete_outline),
-                      ),
-                    ],
+    children.addAll(_exercises.map((ex) {
+      final expanded = _expandedExerciseId == ex.id;
+      return Card(
+        child: Column(
+          children: [
+            ListTile(
+              title: Text(ex.name),
+              subtitle: Text(ex.category),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'History',
+                    onPressed: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => ExerciseDetailScreen(id: ex.id),
+                      ));
+                    },
+                    icon: const Icon(Icons.history),
                   ),
-                ),
-                if (expanded) const Divider(height: 1),
-                if (expanded)
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      children: [
-                        ...ex.sets.asMap().entries.map((entry) {
-                          final i = entry.key + 1;
-                          final s = entry.value;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
-                              children: <Widget>[
-                                SizedBox(width: 32, child: Center(child: Text('$i'))),
-                                const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: s.weight,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            decoration: InputDecoration(
-                              labelText: 'Weight',
-                              hintText: s.weightHint,
-                              floatingLabelBehavior: FloatingLabelBehavior.always,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: TextField(
-                            controller: s.reps,
-                            keyboardType: TextInputType.number,
-                            decoration: InputDecoration(
-                              labelText: 'Reps',
-                              hintText: s.repsHint,
-                              floatingLabelBehavior: FloatingLabelBehavior.always,
-                            ),
-                          ),
-                        ),
-                                const SizedBox(width: 8),
-                                Checkbox(value: s.done, onChanged: (v) => setState(() => s.done = v ?? false)),
-                                IconButton(
-                                  tooltip: 'Delete set',
-                                  onPressed: () => setState(() => ex.sets.remove(s)),
-                                  icon: const Icon(Icons.close),
-                                ),
-                              ],
-                            ),
-                          );
-                        }),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: OutlinedButton.icon(
-                            onPressed: () => setState(() {
-                              final ordinal = ex.sets.length + 1;
-                              ex.sets.add(ex.draftForOrdinal(ordinal));
-                            }),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add set'),
-                          ),
-                        ),
-                      ],
-                    ),
+                  IconButton(
+                    tooltip: expanded ? 'Save exercise' : 'Edit',
+                    onPressed: () => setState(() {
+                      if (expanded) {
+                        _expandedExerciseId = null;
+                      } else {
+                        _expandedExerciseId = ex.id;
+                      }
+                    }),
+                    icon: Icon(expanded ? Icons.save_outlined : Icons.edit),
                   ),
-              ],
+                  IconButton(
+                    tooltip: 'Remove',
+                    onPressed: () => setState(() => _exercises.removeWhere((e) => e.id == ex.id)),
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              ),
             ),
-          );
-        }),
-      ],
+            if (expanded) const Divider(height: 1),
+            if (expanded)
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    ...ex.sets.asMap().entries.map((entry) {
+                      final i = entry.key + 1;
+                      final s = entry.value;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: <Widget>[
+                            SizedBox(width: 32, child: Center(child: Text('$i'))),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: s.weight,
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                decoration: InputDecoration(
+                                  labelText: 'Weight',
+                                  hintText: s.weightHint,
+                                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: TextField(
+                                controller: s.reps,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Reps',
+                                  hintText: s.repsHint,
+                                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Checkbox(value: s.done, onChanged: (v) => setState(() => s.done = v ?? false)),
+                            IconButton(
+                              tooltip: 'Delete set',
+                              onPressed: () => setState(() => ex.sets.remove(s)),
+                              icon: const Icon(Icons.close),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilledButton.tonal(
+                        onPressed: () => setState(() {
+                          final ordinal = ex.sets.length + 1;
+                          ex.sets.add(ex.draftForOrdinal(ordinal));
+                        }),
+                        child: const Text('Add set'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+    }));
+
+    children.add(const SizedBox(height: 80));
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: children,
     );
   }
 
@@ -666,18 +754,21 @@ class _LogScreenState extends State<LogScreen> {
 
     // NOTE: Checkbox is a visual "done" marker only. We still save any set with valid numbers.
     final sets = <Map<String, dynamic>>[];
+    final nowUtc = DateTime.now().toUtc();
     for (final ex in _exercises) {
       int ord = 1;
       for (final s in ex.sets) {
         final weight = double.tryParse(s.weight.text.trim());
         final reps = int.tryParse(s.reps.text.trim());
         if (weight == null || reps == null || weight <= 0 || reps <= 0) continue;
+        final createdAt = s.originalTimestamp ??
+            (_editingWorkoutId != null ? (_editingStartedAt ?? nowUtc) : nowUtc);
         sets.add({
           'exercise_id': ex.id,
           'ordinal': ord++,
           'reps': reps,
           'weight': weight,
-          'created_at': DateTime.now().toUtc(),
+          'created_at': createdAt,
         });
       }
     }
@@ -686,6 +777,21 @@ class _LogScreenState extends State<LogScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nothing to save')));
       }
+      return;
+    }
+
+    if (_editingWorkoutId != null) {
+      final editingId = _editingWorkoutId!;
+      await LocalStore.instance.updateWorkout(
+        workoutId: editingId,
+        name: _editingWorkoutName,
+        notes: null,
+        startedAtUtc: _editingStartedAt,
+        sets: sets,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workout updated')));
+      context.go('/sessions/$editingId');
       return;
     }
 
@@ -710,13 +816,22 @@ class _LogScreenState extends State<LogScreen> {
   Widget build(BuildContext context) {
     final String time = _format(_elapsed);
     final bool inWorkout = _choiceMade || _exercises.isNotEmpty;
+    final bool editing = _editingWorkoutId != null;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Workout'),
+        title: Text(editing ? 'Edit $_editingWorkoutName' : 'Workout'),
         actions: inWorkout
             ? <Widget>[
-                IconButton(onPressed: _saveAsTemplateFlow, icon: const Icon(Icons.save_outlined), tooltip: 'Save as template'),
-                FilledButton(onPressed: _finishAndPersist, child: const Text('Finish')),
+                if (!editing)
+                  IconButton(
+                    onPressed: _saveAsTemplateFlow,
+                    icon: const Icon(Icons.save_outlined),
+                    tooltip: 'Save as template',
+                  ),
+                FilledButton(
+                  onPressed: _finishAndPersist,
+                  child: Text(editing ? 'Save' : 'Finish'),
+                ),
               ]
             : null,
       ),
@@ -780,7 +895,14 @@ class _ExerciseDraft {
 }
 
 class _SetDraft {
-  _SetDraft({String? weight, String? reps, this.weightHint, this.repsHint, this.done = false}) {
+  _SetDraft({
+    String? weight,
+    String? reps,
+    this.weightHint,
+    this.repsHint,
+    this.done = false,
+    this.originalTimestamp,
+  }) {
     if (weight != null && weight.isNotEmpty) {
       this.weight.text = weight;
     }
@@ -794,6 +916,7 @@ class _SetDraft {
   final String? weightHint;
   final String? repsHint;
   bool done;
+  final DateTime? originalTimestamp;
 }
 
 class _SetHistoryEntry {
