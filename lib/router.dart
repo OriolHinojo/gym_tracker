@@ -9,7 +9,8 @@ import 'screens/more/more_screen.dart';
 import 'screens/progress/progress_screen.dart';
 
 final Provider<GoRouter> appRouterProvider = Provider((ref) {
-  final GlobalKey<NavigatorState> rootKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+  final GlobalKey<NavigatorState> rootKey =
+      GlobalKey<NavigatorState>(debugLabel: 'root');
 
   return GoRouter(
     navigatorKey: rootKey,
@@ -22,11 +23,31 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
             bottomNavigationBar: NavigationBar(
               selectedIndex: navigationShell.currentIndex,
               destinations: const <NavigationDestination>[
-                NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-                NavigationDestination(icon: Icon(Icons.edit_outlined), selectedIcon: Icon(Icons.edit), label: 'Log'),
-                NavigationDestination(icon: Icon(Icons.show_chart_outlined), selectedIcon: Icon(Icons.show_chart), label: 'Progress'),
-                NavigationDestination(icon: Icon(Icons.fitness_center_outlined), selectedIcon: Icon(Icons.fitness_center), label: 'Library'),
-                NavigationDestination(icon: Icon(Icons.more_horiz), selectedIcon: Icon(Icons.more_horiz), label: 'More'),
+                NavigationDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: 'Home',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.edit_outlined),
+                  selectedIcon: Icon(Icons.edit),
+                  label: 'Log',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.show_chart_outlined),
+                  selectedIcon: Icon(Icons.show_chart),
+                  label: 'Progress',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.fitness_center_outlined),
+                  selectedIcon: Icon(Icons.fitness_center),
+                  label: 'Library',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.more_horiz),
+                  selectedIcon: Icon(Icons.more_horiz),
+                  label: 'More',
+                ),
               ],
               onDestinationSelected: navigationShell.goBranch,
             ),
@@ -34,31 +55,62 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
         },
         branches: <StatefulShellBranch>[
           StatefulShellBranch(routes: <RouteBase>[
-            GoRoute(path: '/', name: 'home', builder: (context, state) => const HomeScreen()),
-          ]),
-          StatefulShellBranch(routes: <RouteBase>[
-            GoRoute(path: '/log', name: 'log', builder: (context, state) => const LogScreen()),
-          ]),
-          StatefulShellBranch(routes: <RouteBase>[
-            GoRoute(path: '/progress', name: 'progress', builder: (context, state) => const ProgressScreen()),
-          ]),
-          StatefulShellBranch(routes: <RouteBase>[
-            GoRoute(path: '/library', name: 'library', builder: (context, state) => const LibraryScreen()),
             GoRoute(
-              path: '/library/exercise/:id',
-              name: 'exerciseDetail',
-              builder: (context, state) => ExerciseDetailScreen(id: int.parse(state.pathParameters['id']!)),
+              path: '/',
+              name: 'home',
+              builder: (context, state) => const HomeScreen(),
             ),
           ]),
           StatefulShellBranch(routes: <RouteBase>[
-            GoRoute(path: '/more', name: 'more', builder: (context, state) => const MoreScreen()),
+            // IMPORTANT: pass templateId from state.extra when present
+            GoRoute(
+              path: '/log',
+              name: 'log',
+              builder: (context, state) {
+                final extra = state.extra;
+                int? templateId;
+                if (extra is Map && extra['templateId'] is int) {
+                  templateId = extra['templateId'] as int;
+                }
+                return LogScreen(templateId: templateId);
+              },
+            ),
+          ]),
+          StatefulShellBranch(routes: <RouteBase>[
+            GoRoute(
+              path: '/progress',
+              name: 'progress',
+              builder: (context, state) => const ProgressScreen(),
+            ),
+          ]),
+          StatefulShellBranch(routes: <RouteBase>[
+            GoRoute(
+              path: '/library',
+              name: 'library',
+              builder: (context, state) => const LibraryScreen(),
+            ),
+            GoRoute(
+              path: '/library/exercise/:id',
+              name: 'exerciseDetail',
+              builder: (context, state) =>
+                  ExerciseDetailScreen(id: int.parse(state.pathParameters['id']!)),
+            ),
+          ]),
+          StatefulShellBranch(routes: <RouteBase>[
+            GoRoute(
+              path: '/more',
+              name: 'more',
+              builder: (context, state) => const MoreScreen(),
+            ),
           ]),
         ],
       ),
+      // Keep deep link to open an existing workout id (optional)
       GoRoute(
         path: '/workout/:id',
         name: 'workout',
-        builder: (context, state) => LogScreen(workoutId: state.pathParameters['id']),
+        builder: (context, state) =>
+            LogScreen(workoutId: state.pathParameters['id']),
       ),
     ],
   );
