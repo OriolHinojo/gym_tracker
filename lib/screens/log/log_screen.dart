@@ -21,6 +21,7 @@ class _LogScreenState extends State<LogScreen> {
 
   final List<_ExerciseDraft> _exercises = [];
   int? _expandedExerciseId;
+  bool _choiceMade = false;
 
   @override
   void initState() {
@@ -31,31 +32,183 @@ class _LogScreenState extends State<LogScreen> {
     })
       ..start(); // start running immediately
 
-    _prefillFromTemplateIfAny();
+    _initializeFromRoute();
   }
 
-  Future<void> _prefillFromTemplateIfAny() async {
-    if (widget.templateId == null) return;
-    final tpl = await LocalStore.instance.getWorkoutTemplateRaw(widget.templateId!);
+  Future<void> _initializeFromRoute() async {
+    if (widget.templateId != null) {
+      await _applyTemplate(widget.templateId!);
+      return;
+    }
+    if (widget.workoutId != null) {
+      final id = int.tryParse(widget.workoutId!);
+      if (id != null) {
+        await _loadWorkoutFromId(id, markChoice: true);
+      }
+    }
+  }
+
+  Future<void> _applyTemplate(int templateId) async {
+    final tpl = await LocalStore.instance.getWorkoutTemplateRaw(templateId);
     if (tpl == null) return;
     final ids = ((tpl['exercise_ids'] ?? []) as List).map((e) => (e as num).toInt()).toList();
     final all = await LocalStore.instance.listExercisesRaw();
 
-    _exercises.clear();
+    final drafts = <_ExerciseDraft>[];
     for (final id in ids) {
       final ex = all.firstWhere(
         (e) => (e['id'] as num).toInt() == id,
         orElse: () => const {'name': 'Unknown', 'category': 'other'},
       );
-      _exercises.add(_ExerciseDraft(
+      drafts.add(_ExerciseDraft(
         id: id,
         name: (ex['name'] ?? 'Exercise').toString(),
         category: (ex['category'] ?? 'other').toString(),
       ));
     }
-    if (_exercises.isNotEmpty) {
-      setState(() => _expandedExerciseId = _exercises.first.id);
+
+    if (!mounted) return;
+    setState(() {
+      _exercises
+        ..clear()
+        ..addAll(drafts);
+      _expandedExerciseId = _exercises.isNotEmpty ? _exercises.first.id : null;
+      _choiceMade = true;
+    });
+  }
+
+  Future<void> _loadWorkoutFromId(int workoutId, {bool markChoice = false}) async {
+    final sets = await LocalStore.instance.listSetsForWorkoutRaw(workoutId);
+    if (sets.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Previous workout has no logged sets')));
+      }
+      return;
     }
+    final exercises = await LocalStore.instance.listExercisesRaw();
+    final exerciseMap = <int, Map<String, dynamic>>{
+      for (final e in exercises) (e['id'] as num).toInt(): e,
+    };
+
+    final grouped = <int, List<Map<String, dynamic>>>{};
+    for (final raw in sets) {
+      final exId = (raw['exercise_id'] as num?)?.toInt();
+      if (exId == null) continue;
+      grouped.putIfAbsent(exId, () => <Map<String, dynamic>>[]).add(raw);
+    }
+
+    final entries = grouped.entries.toList()
+      ..sort((a, b) {
+        DateTime dateFor(List<Map<String, dynamic>> list) {
+          final raw = list.isEmpty ? null : list.firstWhere(
+                (s) => s['created_at'] != null,
+                orElse: () => list.first,
+              );
+          return DateTime.tryParse((raw?['created_at'] ?? '').toString()) ??
+              DateTime.fromMillisecondsSinceEpoch(0);
+        }
+
+        final da = dateFor(a.value);
+        final db = dateFor(b.value);
+        return da.compareTo(db);
+      });
+
+    final drafts = entries.map((entry) {
+      final info = exerciseMap[entry.key] ?? const {'name': 'Exercise', 'category': 'other'};
+      final setDrafts = entry.value.map((set) {
+        final weight = (set['weight'] as num?)?.toString() ?? '';
+        final reps = (set['reps'] as num?)?.toString() ?? '';
+        return _SetDraft(weight: weight, reps: reps, done: true);
+      }).toList();
+      if (setDrafts.isEmpty) {
+        setDrafts.add(_SetDraft());
+      }
+      return _ExerciseDraft(
+        id: entry.key,
+        name: (info['name'] ?? 'Exercise').toString(),
+        category: (info['category'] ?? 'other').toString(),
+        sets: setDrafts,
+      );
+    }).toList();
+
+    if (!mounted) return;
+    setState(() {
+      _exercises
+        ..clear()
+        ..addAll(drafts);
+      _expandedExerciseId = _exercises.isNotEmpty ? _exercises.first.id : null;
+      if (markChoice || drafts.isNotEmpty) _choiceMade = true;
+      _running = true;
+    });
+    _ticker.reset();
+    _ticker.start();
+  }
+
+  void _startNewWorkout() {
+    setState(() {
+      _choiceMade = true;
+      _exercises.clear();
+      _expandedExerciseId = null;
+      _running = true;
+    });
+    _ticker.reset();
+    _ticker.start();
+  }
+
+  Future<void> _repeatPreviousFlow() async {
+    final workouts = await LocalStore.instance.listRecentWorkoutsRaw(limit: 10);
+    if (!mounted) return;
+    if (workouts.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No previous workouts found')));
+      return;
+    }
+
+    final selectedId = await showModalBottomSheet<int>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('Repeat previous workout'),
+              subtitle: const Text('Pick one of your recent sessions'),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            const Divider(height: 1),
+            SizedBox(
+              height: 320,
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: workouts.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final w = workouts[index];
+                  final wid = (w['id'] as num?)?.toInt();
+                  final startedAt = (w['started_at'] ?? '').toString();
+                  final label = _formatWorkoutDate(startedAt);
+                  return ListTile(
+                    leading: const Icon(Icons.history),
+                    title: Text(
+                      w['name']?.toString().isNotEmpty == true ? w['name'].toString() : 'Workout',
+                    ),
+                    subtitle: Text(label),
+                    onTap: wid == null ? null : () => Navigator.pop(ctx, wid),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selectedId == null) return;
+    await _loadWorkoutFromId(selectedId, markChoice: true);
   }
 
   @override
@@ -68,6 +221,204 @@ class _LogScreenState extends State<LogScreen> {
     final int m = d.inMinutes % 60;
     final int s = d.inSeconds % 60;
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  String _formatWorkoutDate(String isoString) {
+    final dt = DateTime.tryParse(isoString)?.toLocal();
+    if (dt == null) return 'Unknown date';
+    final date = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    return '$date at $time';
+  }
+
+  Widget _buildWorkoutBody(String time) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Chip(label: Text('Timer: $time')),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _running = !_running;
+                  if (_running) {
+                    _ticker.start(); // resumes the stopwatch
+                  } else {
+                    _ticker.pause(); // stops the stopwatch (elapsed freezes)
+                  }
+                });
+              },
+              icon: Icon(_running ? Icons.pause : Icons.play_arrow),
+            ),
+            const Spacer(),
+            FilledButton.icon(
+              onPressed: _addExerciseFlow,
+              icon: const Icon(Icons.add),
+              label: const Text('Add exercise'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        if (_exercises.isEmpty)
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('No exercises yet'),
+              subtitle: const Text('Add from Library or create on the fly'),
+              trailing: FilledButton(onPressed: _addExerciseFlow, child: const Text('Add')),
+            ),
+          ),
+
+        ..._exercises.map((ex) {
+          final expanded = _expandedExerciseId == ex.id;
+          return Card(
+            child: Column(
+              children: [
+                ListTile(
+                  title: Text(ex.name),
+                  subtitle: Text(ex.category),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'History',
+                        onPressed: () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => ExerciseDetailScreen(id: ex.id),
+                          ));
+                        },
+                        icon: const Icon(Icons.history),
+                      ),
+                      IconButton(
+                        tooltip: expanded ? 'Save exercise' : 'Edit',
+                        onPressed: () => setState(() {
+                          if (expanded) {
+                            _expandedExerciseId = null;
+                          } else {
+                            _expandedExerciseId = ex.id;
+                          }
+                        }),
+                        icon: Icon(expanded ? Icons.save_outlined : Icons.edit),
+                      ),
+                      IconButton(
+                        tooltip: 'Remove',
+                        onPressed: () => setState(() => _exercises.removeWhere((e) => e.id == ex.id)),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                ),
+                if (expanded) const Divider(height: 1),
+                if (expanded)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        ...ex.sets.asMap().entries.map((entry) {
+                          final i = entry.key + 1;
+                          final s = entry.value;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            child: Row(
+                              children: <Widget>[
+                                SizedBox(width: 32, child: Center(child: Text('$i'))),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: s.weight,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: const InputDecoration(labelText: 'Weight'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: s.reps,
+                                    keyboardType: TextInputType.number,
+                                    decoration: const InputDecoration(labelText: 'Reps'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Checkbox(value: s.done, onChanged: (v) => setState(() => s.done = v ?? false)),
+                                IconButton(
+                                  tooltip: 'Delete set',
+                                  onPressed: () => setState(() => ex.sets.remove(s)),
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: OutlinedButton.icon(
+                            onPressed: () => setState(() => ex.sets.add(_SetDraft())),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add set'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildStartOptions(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.fitness_center, size: 56, color: scheme.primary),
+            const SizedBox(height: 16),
+            Text(
+              'How do you want to train today?',
+              style: textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.flash_on_outlined),
+                title: const Text('Start new workout'),
+                subtitle: const Text('Build a fresh session from scratch.'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: _startNewWorkout,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.history_rounded),
+                title: const Text('Repeat previous workout'),
+                subtitle: const Text('Load exercises and sets from a recent session.'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: _repeatPreviousFlow,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () => context.push('/library'),
+              icon: const Icon(Icons.fitness_center_outlined),
+              label: const Text('Browse templates in Library'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _addExerciseFlow() async {
@@ -260,6 +611,15 @@ class _LogScreenState extends State<LogScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workout saved')));
 
+    setState(() {
+      _choiceMade = false;
+      _exercises.clear();
+      _expandedExerciseId = null;
+      _running = true;
+    });
+    _ticker.reset();
+    _ticker.start();
+
     // Go back to the Log tab explicitly
     context.go('/log');
   }
@@ -267,152 +627,18 @@ class _LogScreenState extends State<LogScreen> {
   @override
   Widget build(BuildContext context) {
     final String time = _format(_elapsed);
+    final bool inWorkout = _choiceMade || _exercises.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workout'),
-        actions: <Widget>[
-          IconButton(onPressed: _saveAsTemplateFlow, icon: const Icon(Icons.save_outlined), tooltip: 'Save as template'),
-          FilledButton(onPressed: _finishAndPersist, child: const Text('Finish')),
-        ],
+        actions: inWorkout
+            ? <Widget>[
+                IconButton(onPressed: _saveAsTemplateFlow, icon: const Icon(Icons.save_outlined), tooltip: 'Save as template'),
+                FilledButton(onPressed: _finishAndPersist, child: const Text('Finish')),
+              ]
+            : null,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Chip(label: Text('Timer: $time')),
-              const SizedBox(width: 8),
-              IconButton(
-                onPressed: () {
-                  setState(() {
-                    _running = !_running;
-                    if (_running) {
-                      _ticker.start(); // resumes the stopwatch
-                    } else {
-                      _ticker.pause(); // stops the stopwatch (elapsed freezes)
-                    }
-                  });
-                },
-                icon: Icon(_running ? Icons.pause : Icons.play_arrow),
-              ),
-              const Spacer(),
-              FilledButton.icon(
-                onPressed: _addExerciseFlow,
-                icon: const Icon(Icons.add),
-                label: const Text('Add exercise'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          if (_exercises.isEmpty)
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('No exercises yet'),
-                subtitle: const Text('Add from Library or create on the fly'),
-                trailing: FilledButton(onPressed: _addExerciseFlow, child: const Text('Add')),
-              ),
-            ),
-
-          ..._exercises.map((ex) {
-            final expanded = _expandedExerciseId == ex.id;
-            return Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    title: Text(ex.name),
-                    subtitle: Text(ex.category),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: 'History',
-                          onPressed: () {
-                            Navigator.of(context).push(MaterialPageRoute(
-                              builder: (_) => ExerciseDetailScreen(id: ex.id),
-                            ));
-                          },
-                          icon: const Icon(Icons.history),
-                        ),
-                        IconButton(
-                          tooltip: expanded ? 'Save exercise' : 'Edit',
-                          onPressed: () => setState(() {
-                            if (expanded) {
-                              _expandedExerciseId = null;
-                            } else {
-                              _expandedExerciseId = ex.id;
-                            }
-                          }),
-                          icon: Icon(expanded ? Icons.save_outlined : Icons.edit),
-                        ),
-                        IconButton(
-                          tooltip: 'Remove',
-                          onPressed: () => setState(() => _exercises.removeWhere((e) => e.id == ex.id)),
-                          icon: const Icon(Icons.delete_outline),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (expanded) const Divider(height: 1),
-                  if (expanded)
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          ...ex.sets.asMap().entries.map((entry) {
-                            final i = entry.key + 1;
-                            final s = entry.value;
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: Row(
-                                children: <Widget>[
-                                  SizedBox(width: 32, child: Center(child: Text('$i'))),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: s.weight,
-                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                      decoration: const InputDecoration(labelText: 'Weight'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: s.reps,
-                                      keyboardType: TextInputType.number,
-                                      decoration: const InputDecoration(labelText: 'Reps'),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Checkbox(value: s.done, onChanged: (v) => setState(() => s.done = v ?? false)),
-                                  IconButton(
-                                    tooltip: 'Delete set',
-                                    onPressed: () => setState(() => ex.sets.remove(s)),
-                                    icon: const Icon(Icons.close),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }),
-                          const SizedBox(height: 8),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: OutlinedButton.icon(
-                              onPressed: () => setState(() => ex.sets.add(_SetDraft())),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add set'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
+      body: inWorkout ? _buildWorkoutBody(time) : _buildStartOptions(context),
     );
   }
 }
@@ -420,17 +646,31 @@ class _LogScreenState extends State<LogScreen> {
 /* ---------------------------- Data in the screen ---------------------------- */
 
 class _ExerciseDraft {
-  _ExerciseDraft({required this.id, required this.name, required this.category});
+  _ExerciseDraft({
+    required this.id,
+    required this.name,
+    required this.category,
+    List<_SetDraft>? sets,
+  }) : sets = sets ?? [_SetDraft(), _SetDraft()];
   final int id;
   final String name;
   final String category;
-  final List<_SetDraft> sets = [_SetDraft(), _SetDraft()];
+  final List<_SetDraft> sets;
 }
 
 class _SetDraft {
+  _SetDraft({String? weight, String? reps, this.done = false}) {
+    if (weight != null && weight.isNotEmpty) {
+      this.weight.text = weight;
+    }
+    if (reps != null && reps.isNotEmpty) {
+      this.reps.text = reps;
+    }
+  }
+
   final TextEditingController weight = TextEditingController();
   final TextEditingController reps = TextEditingController();
-  bool done = false;
+  bool done;
 }
 
 /* --------------------------------- Ticker --------------------------------- */
