@@ -61,7 +61,10 @@ class _LibraryScreenState extends State<LibraryScreen>
       body: TabBarView(
         controller: _tab,
         children: [
-          _ExercisesTab(query: _query, onQuery: (s) => setState(() => _query = s)),
+          _ExercisesTab(
+            query: _query,
+            onQuery: (s) => setState(() => _query = s),
+          ),
           _WorkoutsTab(
             refreshToken: _workoutsRevision,
             onChanged: _refreshWorkouts,
@@ -155,11 +158,16 @@ class _LibraryScreenState extends State<LibraryScreen>
 
 /* ------------------------------- Exercises ------------------------------- */
 
-class _ExercisesTab extends StatelessWidget {
+class _ExercisesTab extends StatefulWidget {
   const _ExercisesTab({required this.query, required this.onQuery});
   final String query;
   final ValueChanged<String> onQuery;
 
+  @override
+  State<_ExercisesTab> createState() => _ExercisesTabState();
+}
+
+class _ExercisesTabState extends State<_ExercisesTab> {
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -169,7 +177,7 @@ class _ExercisesTab extends StatelessWidget {
           child: TextField(
             decoration:
                 const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search exercises'),
-            onChanged: (v) => onQuery(v.trim()),
+            onChanged: (v) => widget.onQuery(v.trim()),
           ),
         ),
         Expanded(
@@ -183,7 +191,7 @@ class _ExercisesTab extends StatelessWidget {
                 return Center(child: Text('Error loading exercises:\n${snapshot.error}'));
               }
               final exercises = snapshot.data ?? [];
-              final q = query.toLowerCase();
+              final q = widget.query.toLowerCase();
               final filtered = q.isEmpty
                   ? exercises
                   : exercises.where((e) {
@@ -213,6 +221,14 @@ class _ExercisesTab extends StatelessWidget {
                               'exerciseDetail',
                               pathParameters: {'id': id.toString()},
                             ),
+                    onLongPress: id == null
+                        ? null
+                        : () => _showExerciseActions(
+                              context,
+                              id: id,
+                              initialName: name,
+                              initialCategory: category,
+                            ),
                   );
                 },
               );
@@ -222,7 +238,84 @@ class _ExercisesTab extends StatelessWidget {
       ],
     );
   }
+
+  Future<void> _showExerciseActions(
+    BuildContext context, {
+    required int id,
+    required String initialName,
+    required String initialCategory,
+  }) async {
+    final action = await showModalBottomSheet<_ExerciseAction>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit exercise'),
+              onTap: () => Navigator.pop(ctx, _ExerciseAction.edit),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Delete exercise'),
+              onTap: () => Navigator.pop(ctx, _ExerciseAction.delete),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case _ExerciseAction.edit:
+        final updated = await showEditExerciseDialog(
+          context,
+          id: id,
+          initialName: initialName,
+          initialCategory: initialCategory,
+        );
+        if (!mounted || !updated) return;
+        final refreshed = await LocalStore.instance.getExerciseRaw(id);
+        if (!mounted) return;
+        setState(() {});
+        final newName = (refreshed?['name'] ?? initialName).toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Updated "$newName"')),
+        );
+        break;
+      case _ExerciseAction.delete:
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogCtx) => AlertDialog(
+            title: const Text('Delete exercise'),
+            content: Text('Delete "$initialName"? This removes its sets and template references.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogCtx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogCtx, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true) return;
+        await LocalStore.instance.deleteExercise(id);
+        if (!mounted) return;
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted "$initialName"')),
+        );
+        break;
+    }
+  }
 }
+
+enum _ExerciseAction { edit, delete }
 
 /* -------------------------------- Workouts -------------------------------- */
 

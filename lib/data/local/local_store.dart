@@ -344,6 +344,58 @@ class LocalStore {
     return id;
   }
 
+  Future<void> updateExercise({
+    required int id,
+    required String name,
+    required String category,
+  }) async {
+    await init();
+    final list = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
+    final index = list.indexWhere((e) => (e['id'] as num?)?.toInt() == id);
+    if (index == -1) return;
+    final existing = Map<String, dynamic>.from(list[index]);
+    existing['name'] = name;
+    existing['category'] = category;
+    list[index] = existing;
+    _db['exercises'] = list;
+    await _save();
+  }
+
+  Future<void> deleteExercise(int id) async {
+    await init();
+    final exercises = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
+    final before = exercises.length;
+    exercises.removeWhere((e) => (e['id'] as num?)?.toInt() == id);
+    if (before == exercises.length) return;
+    _db['exercises'] = exercises;
+
+    final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    final preferred = (settings['preferred_exercise_id'] as num?)?.toInt();
+    if (preferred == id) {
+      settings['preferred_exercise_id'] = null;
+      _preferredExerciseId.value = null;
+    }
+    _db['settings'] = settings;
+
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    sets.removeWhere((s) => (s['exercise_id'] as num?)?.toInt() == id);
+    _db['sets'] = sets;
+
+    final templates = List<Map<String, dynamic>>.from(_db['workout_templates'] ?? const []);
+    for (final template in templates) {
+      final rawIds = (template['exercise_ids'] as List?) ?? const [];
+      final filtered = rawIds
+          .whereType<num>()
+          .map((e) => e.toInt())
+          .where((exerciseId) => exerciseId != id)
+          .toList();
+      template['exercise_ids'] = filtered;
+    }
+    _db['workout_templates'] = templates;
+
+    await _save();
+  }
+
   /// Preferred (user-chosen) favourite exercise ID.
   Future<int?> getPreferredExerciseId() async {
     await init();
@@ -662,14 +714,24 @@ class LocalStore {
 
       String lastWorkoutName = '—';
       DateTime? lastWorkoutStartedAt;
+      int? lastWorkoutId;
       if (lastWorkout.isNotEmpty) {
         final lw = lastWorkout.first;
         lastWorkoutName = (lw['name'] ?? 'Workout').toString();
         lastWorkoutStartedAt =
             DateTime.tryParse((lw['started_at'] ?? '').toString())?.toUtc();
+        final idNum = lw['id'] as num?;
+        lastWorkoutId = idNum?.toInt();
       }
 
-      return HomeStats(weeklyCount, delta, lastWorkoutName, lastWorkoutStartedAt, favName);
+      return HomeStats(
+        weeklyCount,
+        delta,
+        lastWorkoutName,
+        lastWorkoutStartedAt,
+        favName,
+        lastWorkoutId: lastWorkoutId,
+      );
     } catch (e) {
       debugPrint('LocalStore.getHomeStats error: $e');
       return const HomeStats(0, 0.0, '—', null, '—');
@@ -716,6 +778,7 @@ class _Fav {
 class HomeStats {
   final int weeklySessions;
   final double e1rmDelta;
+  final int? lastWorkoutId;
   final String lastWorkoutName;
   final DateTime? lastWorkoutStartedAt;
   final String favouriteExercise;
@@ -725,10 +788,11 @@ class HomeStats {
     this.e1rmDelta,
     this.lastWorkoutName,
     this.lastWorkoutStartedAt,
-    this.favouriteExercise,
-  );
+    this.favouriteExercise, {
+    this.lastWorkoutId,
+  });
 
   @override
   String toString() =>
-      'HomeStats(weeklySessions: $weeklySessions, e1rmDelta: $e1rmDelta, lastWorkoutName: $lastWorkoutName, lastWorkoutStartedAt: $lastWorkoutStartedAt, favouriteExercise: $favouriteExercise)';
+      'HomeStats(weeklySessions: $weeklySessions, e1rmDelta: $e1rmDelta, lastWorkoutId: $lastWorkoutId, lastWorkoutName: $lastWorkoutName, lastWorkoutStartedAt: $lastWorkoutStartedAt, favouriteExercise: $favouriteExercise)';
 }

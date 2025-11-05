@@ -84,14 +84,26 @@ class HomeScreen extends StatelessWidget {
 // ---------- HomeStats Extension ----------
 
 extension on HomeStats {
-  String get lastWorkoutDisplay {
+  String get lastWorkoutTitle {
     if (lastWorkoutName == '—') return '—';
-    if (lastWorkoutStartedAt == null) return lastWorkoutName;
-    final dt = lastWorkoutStartedAt!.toLocal();
+    final trimmed = lastWorkoutName.trim();
+    return trimmed.isEmpty ? 'Workout' : trimmed;
+  }
+
+  String? get lastWorkoutSubtitle {
+    if (lastWorkoutName == '—') return null;
+    final dt = lastWorkoutStartedAt?.toLocal();
+    if (dt == null) return 'Unknown date';
     String two(int n) => n.toString().padLeft(2, '0');
     final date = '${dt.year}-${two(dt.month)}-${two(dt.day)}';
     final time = '${two(dt.hour)}:${two(dt.minute)}';
-    return '$lastWorkoutName — $date $time';
+    return '$date · $time';
+  }
+
+  String? get lastWorkoutRoute {
+    final id = lastWorkoutId;
+    if (lastWorkoutName == '—' || id == null) return null;
+    return '/sessions/$id';
   }
 
   List<_StatItem> toItems() => [
@@ -112,11 +124,12 @@ extension on HomeStats {
         ),
         _StatItem(
           'Last Session',
-          lastWorkoutDisplay,
+          lastWorkoutTitle,
           null,
           Icons.fitness_center_rounded,
-          '/log',
+          lastWorkoutRoute,
           textOnly: true,
+          subtitle: lastWorkoutSubtitle,
         ),
       ];
 }
@@ -257,14 +270,15 @@ class _SummaryGrid extends StatelessWidget {
 
 class _StatItem {
   const _StatItem(this.title, this.value, this.suffix, this.icon, this.route,
-      {this.positive, this.textOnly = false});
+      {this.positive, this.textOnly = false, this.subtitle});
   final String title;
   final String value;
   final String? suffix;
   final IconData icon;
-  final String route;
+  final String? route;
   final bool? positive;
   final bool textOnly;
+  final String? subtitle;
 }
 
 class _StatCard extends StatelessWidget {
@@ -279,7 +293,7 @@ class _StatCard extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => context.go(item.route),
+      onTap: item.route == null ? null : () => context.go(item.route!),
       child: Ink(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
@@ -313,7 +327,21 @@ class _StatCard extends StatelessWidget {
                     Text(item.title, style: t.titleMedium),
                     const SizedBox(height: 4),
                     item.textOnly
-                        ? Text(item.value, style: t.bodyLarge)
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.value, style: t.bodyLarge),
+                              if ((item.subtitle ?? '').isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  item.subtitle!,
+                                  style: t.bodySmall?.copyWith(
+                                    color: scheme.outline,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )
                         : Row(
                             children: [
                               Text(item.value,

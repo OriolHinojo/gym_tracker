@@ -9,6 +9,12 @@ class CreatedExercise {
   final String category;
 }
 
+class _ExerciseDialogResult {
+  const _ExerciseDialogResult({required this.name, required this.category});
+  final String name;
+  final String category;
+}
+
 const List<Map<String, String>> _exerciseCategories = <Map<String, String>>[
   {'value': 'compound', 'label': 'Compound'},
   {'value': 'isolation', 'label': 'Isolation'},
@@ -23,11 +29,65 @@ const List<Map<String, String>> _exerciseCategories = <Map<String, String>>[
 
 /// Shows the shared create-exercise dialog and returns the created exercise.
 Future<CreatedExercise?> showCreateExerciseDialog(BuildContext context) async {
+  final result = await _showExerciseDialog(context, title: 'New Exercise');
+  if (result == null) return null;
+
+  final id = await LocalStore.instance.createExercise(
+    name: result.name,
+    category: result.category,
+  );
+
+  return CreatedExercise(id: id, name: result.name, category: result.category);
+}
+
+/// Shows the shared edit-exercise dialog and persists the update.
+Future<bool> showEditExerciseDialog(
+  BuildContext context, {
+  required int id,
+  required String initialName,
+  required String initialCategory,
+}) async {
+  final result = await _showExerciseDialog(
+    context,
+    title: 'Edit Exercise',
+    isEditing: true,
+    initialName: initialName,
+    initialCategory: initialCategory,
+  );
+  if (result == null) return false;
+
+  await LocalStore.instance.updateExercise(
+    id: id,
+    name: result.name,
+    category: result.category,
+  );
+  return true;
+}
+
+Future<_ExerciseDialogResult?> _showExerciseDialog(
+  BuildContext context, {
+  required String title,
+  bool isEditing = false,
+  String? initialName,
+  String? initialCategory,
+}) async {
   final nameCtrl = TextEditingController();
   final customCatCtrl = TextEditingController();
-  var selectedCategory = _exerciseCategories.first['value']!;
-  CreatedExercise? created;
+  String selectedCategory = _exerciseCategories.first['value']!;
 
+  if (initialName != null && initialName.isNotEmpty) {
+    nameCtrl.text = initialName;
+  }
+
+  String? resolved = _resolveCategoryValue(initialCategory);
+  if (resolved != null) {
+    selectedCategory = resolved;
+  } else if (initialCategory != null && initialCategory.isNotEmpty) {
+    selectedCategory = 'other';
+    customCatCtrl.text = initialCategory;
+  }
+
+  _ExerciseDialogResult? result;
   await showDialog(
     context: context,
     builder: (dialogCtx) => StatefulBuilder(
@@ -35,7 +95,7 @@ Future<CreatedExercise?> showCreateExerciseDialog(BuildContext context) async {
         final optionStyle = Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400);
 
         return AlertDialog(
-          title: const Text('New Exercise'),
+          title: Text(title),
           content: SingleChildScrollView(
             padding: EdgeInsets.only(bottom: MediaQuery.of(dialogCtx).viewInsets.bottom),
             child: ConstrainedBox(
@@ -103,13 +163,12 @@ Future<CreatedExercise?> showCreateExerciseDialog(BuildContext context) async {
                   }
                 }
 
-                final id = await LocalStore.instance.createExercise(name: name, category: category);
-                created = CreatedExercise(id: id, name: name, category: category);
+                result = _ExerciseDialogResult(name: name, category: category);
                 if (Navigator.canPop(dialogCtx)) {
                   Navigator.pop(dialogCtx);
                 }
               },
-              child: const Text('Create'),
+              child: Text(isEditing ? 'Save' : 'Create'),
             ),
           ],
         );
@@ -119,5 +178,16 @@ Future<CreatedExercise?> showCreateExerciseDialog(BuildContext context) async {
 
   nameCtrl.dispose();
   customCatCtrl.dispose();
-  return created;
+  return result;
+}
+
+String? _resolveCategoryValue(String? category) {
+  if (category == null) return null;
+  final normalized = category.toLowerCase().trim();
+  for (final entry in _exerciseCategories) {
+    if (entry['value'] == normalized) {
+      return entry['value'];
+    }
+  }
+  return null;
 }
