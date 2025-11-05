@@ -64,6 +64,7 @@
   - e1RM delta vs. previous week for the favourite exercise (auto-selected or user-set).
   - Exercises performed in the most recent session.
 - Content updates through `ValueListenableBuilder` hooked to `preferredExerciseIdListenable`.
+- Recent sessions list now ships an inline “eye” icon that opens the shared session preview bottom sheet. The sheet uses the centralised `SessionDetail` loader and renders the new primary-container header card with workout metadata chips; exercise cards stay collapsed by default for a quick skim and expand to larger weight/rep typography on demand.
 - “Highlights” card is currently static placeholder copy.
 - FAB: `Quick Start` → opens `/log`.
 
@@ -90,6 +91,7 @@
 - “Add exercise” bottom sheet:
   - Searchable list of all exercises from `LocalStore`.
   - “Create new exercise” uses the shared dialog and automatically inserts the new entry.
+- The dedicated workout detail screen now reuses the shared session header + exercise list widgets, ensuring the collapsible set cards behave the same way as in previews (tap to expand sets, weight/reps hidden by default).
 
 ### Actions
 - **Save as template**: collects current exercise ids and persists a workout template via `LocalStore.createWorkoutTemplate`.
@@ -110,7 +112,7 @@
 ### Workouts tab
 - Lists persisted templates; supports preview, delete, and “Run in Log”.
 - “New Workout Template” dialog allows picking exercises via checkboxes and persists to `LocalStore`.
-- Preview bottom sheet fetches the latest exercise metadata to show names + categories.
+- Template preview bottom sheet now goes through the shared session preview UI. It fabricates a lightweight `SessionDetail` (id `0`) that pulls the most recent recorded sets per exercise, so users see real weights/reps alongside a note clarifying the data source.
 
 ### Exercise detail (`ExerciseDetailScreen`)
 - Loads exercise info, raw sets, and preferred exercise status.
@@ -135,6 +137,8 @@
 
 ## 9) 🧩 Shared Widgets & Utilities
 
+- `SessionDetail` (`lib/shared/session_detail.dart`): single source of truth for loading workouts, grouping sets per exercise, and resolving exercise names.
+- `SessionPreviewSheet`, `SessionHeaderCard`, `SessionExercisesList`: reusable session UI primitives. The header card sits on the brand `primaryContainer`, adds template/session chips (exercise count, total sets), and surfaces notes inline. Exercise cards start collapsed, show summary stats (set count, total reps, top set), and expand on tap to reveal set lists with enlarged weight/rep text for readability.
 - `ProgressFilters`: wrap of choice chips with optional `leading` widgets for extra controls.
 - `ProgressLineChart`: lightweight `CustomPainter` line chart (no external chart dependency used despite `fl_chart` being listed).
 - `ProgressPointsRecap`: simple card listing all generated `ProgressPoint`s.
