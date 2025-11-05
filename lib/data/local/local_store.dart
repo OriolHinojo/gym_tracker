@@ -221,6 +221,16 @@ class LocalStore {
     return rows;
   }
 
+  /// Returns all sets for a given exercise ID.
+  Future<List<Map<String, dynamic>>> listSetsForExerciseRaw(int exerciseId) async {
+  await init();
+  final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+  return sets
+      .where((s) => s['exercise_id'] == exerciseId)
+      .map((s) => Map<String, dynamic>.from(s))
+      .toList();
+  }
+
   /// Returns a single exercise by ID.
   Future<Map<String, dynamic>?> getExerciseRaw(int id) async {
     await init();
@@ -304,7 +314,7 @@ class LocalStore {
       return HomeStats(weeklyCount, delta, lastNames);
     } catch (e) {
       debugPrint('LocalStore.getHomeStats error: $e');
-      return HomeStats(0, 0.0, '—');
+      return const HomeStats(0, 0.0, '—');
     }
   }
 }
