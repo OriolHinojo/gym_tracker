@@ -5,7 +5,9 @@ import 'package:gym_tracker/theme/theme_switcher.dart';
 import 'package:gym_tracker/theme/theme.dart' show BrandColors;
 import 'package:gym_tracker/data/local/local_store.dart';
 
+/// Home Screen
 class HomeScreen extends StatelessWidget {
+  /// Constructor
   const HomeScreen({super.key});
 
   @override
