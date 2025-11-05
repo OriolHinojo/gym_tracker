@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:gym_tracker/theme/theme_switcher.dart';
 import 'package:gym_tracker/theme/theme.dart' show BrandColors;
 import 'package:gym_tracker/data/local/local_store.dart';
 
@@ -18,7 +17,6 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('IronPulse'),
-        actions: const [ThemeSwitcher()],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: Container(

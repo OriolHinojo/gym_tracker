@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_tracker/theme/theme_switcher.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -6,7 +7,7 @@ class MoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('More')),
+      appBar: AppBar(title: const Text('More'), actions: const [ThemeSwitcher()]),
       body: ListView(
         children: <Widget>[
           SwitchListTile(
