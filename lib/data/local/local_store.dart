@@ -16,9 +16,8 @@ class LocalStore {
   Map<String, dynamic> _db = {};
   Completer<void>? _initComp;
 
-  /// Notifier that emits whenever preferred_exercise_id changes
+  // Notifier: emits whenever preferred_exercise_id changes (Home listens to this).
   final ValueNotifier<int?> _preferredExerciseId = ValueNotifier<int?>(null);
-  /// Exposes the preferred exercise ID listenable
   ValueListenable<int?> get preferredExerciseIdListenable => _preferredExerciseId;
 
   /// Initializes the local database file and loads it into memory.
@@ -44,11 +43,13 @@ class LocalStore {
             _seedMockData();
             await _save();
           } else {
-            _db = (json.decode(text) as Map).cast<String, dynamic>();
+            final parsed = (json.decode(text) as Map).cast<String, dynamic>();
+            _db = parsed;
+            _db.putIfAbsent('version', () => 1);
             _db.putIfAbsent('settings', () => {'preferred_exercise_id': null});
+            _db.putIfAbsent('workout_templates', () => <Map<String, dynamic>>[]);
           }
-        } catch (e) {
-          // Backup bad file and rebuild with mock data
+        } catch (_) {
           try {
             final ts = DateTime.now().toUtc().toIso8601String().replaceAll(':', '-');
             await _file!.rename('${_file!.path}.$ts.bak');
@@ -58,7 +59,6 @@ class LocalStore {
         }
       }
 
-      // === NEW: prime the notifier from settings after DB is loaded ===
       final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
       final pref = settings['preferred_exercise_id'];
       _preferredExerciseId.value = pref == null ? null : (pref as num).toInt();
@@ -201,14 +201,23 @@ class LocalStore {
     ];
 
     _db = {
-      'version': 1,
+      'version': 2,
       'settings': {
-        'preferred_exercise_id': null, // user-chosen favourite exercise
+        'preferred_exercise_id': null,
       },
       'users': [user],
       'exercises': exercises,
       'workouts': [workout1, workout2, workout3],
       'sets': sets,
+      // Workout templates (named groups of exercises)
+      'workout_templates': <Map<String, dynamic>>[
+        {
+          'id': 1,
+          'name': 'Push Day',
+          'exercise_ids': [1], // Bench
+          'created_at': now.toIso8601String(),
+        },
+      ],
       'prs': [],
       'body_metrics': [],
     };
@@ -223,10 +232,19 @@ class LocalStore {
   }
 
   // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  int _nextId(List<Map<String, dynamic>> table) {
+    if (table.isEmpty) return 1;
+    final ids = table.map((e) => (e['id'] as num?)?.toInt() ?? 0).toList()..sort();
+    return ids.last + 1;
+  }
+
+  // ---------------------------------------------------------------------------
   // Public APIs for your UI
   // ---------------------------------------------------------------------------
 
-  /// Returns all exercises from the DB.
   Future<List<Map<String, dynamic>>> listExercisesRaw() async {
     await init();
     final rows = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
@@ -234,17 +252,6 @@ class LocalStore {
     return rows;
   }
 
-  /// Returns all sets for a given exercise ID.
-  Future<List<Map<String, dynamic>>> listSetsForExerciseRaw(int exerciseId) async {
-    await init();
-    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
-    return sets
-        .where((s) => (s['exercise_id'] as num?)?.toInt() == exerciseId)
-        .map((s) => Map<String, dynamic>.from(s))
-        .toList();
-  }
-
-  /// Returns a single exercise by ID.
   Future<Map<String, dynamic>?> getExerciseRaw(int id) async {
     await init();
     final rows = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
@@ -255,7 +262,27 @@ class LocalStore {
     }
   }
 
-  /// Gets the preferred (favourite) exercise ID from settings.
+  Future<List<Map<String, dynamic>>> listSetsForExerciseRaw(int exerciseId) async {
+    await init();
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    return sets
+        .where((s) => (s['exercise_id'] as num?)?.toInt() == exerciseId)
+        .map((s) => Map<String, dynamic>.from(s))
+        .toList();
+  }
+
+  /// Create an exercise on the fly.
+  Future<int> createExercise({required String name, String category = 'other'}) async {
+    await init();
+    final list = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
+    final id = _nextId(list);
+    list.add({'id': id, 'name': name, 'category': category});
+    _db['exercises'] = list;
+    await _save();
+    return id;
+  }
+
+  /// Preferred (user-chosen) favourite exercise ID.
   Future<int?> getPreferredExerciseId() async {
     await init();
     final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
@@ -263,19 +290,109 @@ class LocalStore {
     return id == null ? null : (id as num).toInt();
   }
 
-  /// Sets the preferred (favourite) exercise ID in settings.
+  /// Set or clear the preferred favourite exercise.
   Future<void> setPreferredExerciseId(int? exerciseId) async {
     await init();
     final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
     settings['preferred_exercise_id'] = exerciseId;
     _db['settings'] = settings;
     await _save();
-
-    // === NEW: notify listeners so Home/others can rebuild ===
     _preferredExerciseId.value = exerciseId;
   }
 
-  /// Computes and returns home statistics for the dashboard.
+  // ----- Workout templates -----
+
+  Future<List<Map<String, dynamic>>> listWorkoutTemplatesRaw() async {
+    await init();
+    final list = List<Map<String, dynamic>>.from(_db['workout_templates'] ?? const []);
+    list.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+    return list;
+  }
+
+  Future<Map<String, dynamic>?> getWorkoutTemplateRaw(int id) async {
+    await init();
+    final list = List<Map<String, dynamic>>.from(_db['workout_templates'] ?? const []);
+    try {
+      return list.firstWhere((e) => (e['id'] as num?)?.toInt() == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<int> createWorkoutTemplate({required String name, required List<int> exerciseIds}) async {
+    await init();
+    final list = List<Map<String, dynamic>>.from(_db['workout_templates'] ?? const []);
+    final id = _nextId(list);
+    list.add({
+      'id': id,
+      'name': name,
+      'exercise_ids': exerciseIds,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+    });
+    _db['workout_templates'] = list;
+    await _save();
+    return id;
+  }
+
+  Future<void> deleteWorkoutTemplate(int id) async {
+    await init();
+    final list = List<Map<String, dynamic>>.from(_db['workout_templates'] ?? const []);
+    list.removeWhere((e) => (e['id'] as num?)?.toInt() == id);
+    _db['workout_templates'] = list;
+    await _save();
+  }
+
+  // ----- Persist a finished workout (and its sets) -----
+
+  /// Save a workout with its sets. Returns the new workout id.
+  ///
+  /// [sets] entries: {exercise_id, ordinal, reps, weight, created_at?}
+  Future<int> saveWorkout({
+    required int userId,
+    required String name,
+    String notes = '',
+    DateTime? startedAtUtc,
+    required List<Map<String, dynamic>> sets,
+  }) async {
+    await init();
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
+    final allSets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    final now = DateTime.now().toUtc();
+    final wid = _nextId(workouts);
+    final started = startedAtUtc ?? now;
+
+    workouts.add({
+      'id': wid,
+      'user_id': userId,
+      'name': name,
+      'started_at': started.toIso8601String(),
+      'notes': notes,
+    });
+
+    int nextSetId = allSets.isEmpty
+        ? 1
+        : (allSets.map((e) => (e['id'] as num).toInt()).reduce((a, b) => a > b ? a : b) + 1);
+
+    for (final s in sets) {
+      allSets.add({
+        'id': nextSetId++,
+        'workout_id': wid,
+        'user_id': userId,
+        'exercise_id': (s['exercise_id'] as num).toInt(),
+        'ordinal': (s['ordinal'] as num).toInt(),
+        'reps': (s['reps'] as num).toInt(),
+        'weight': (s['weight'] as num).toDouble(),
+        'created_at': (s['created_at'] as DateTime? ?? now).toIso8601String(),
+      });
+    }
+
+    _db['workouts'] = workouts;
+    _db['sets'] = allSets;
+    await _save();
+    return wid;
+  }
+
+  /// Returns quick summary stats for home dashboard.
   Future<HomeStats> getHomeStats({int userId = 1}) async {
     await init();
     try {
@@ -314,7 +431,6 @@ class LocalStore {
         );
       }
 
-      /// Average E1RM for a specific exercise id in a time range (Epley), filter sanity: reps 1..36, weight>0.
       double _avgE1ForRangeForExercise(DateTime start, DateTime end, int exerciseId) {
         final rows = sets.where((s) {
           if (s['user_id'] != userId) return false;
@@ -349,7 +465,7 @@ class LocalStore {
         delta = double.parse((avgThis - avgPrev).toStringAsFixed(2));
       }
 
-      // Last session exercises (distinct names in most recent workout)
+      // Last session exercises
       final lastWorkout = (workouts.where((w) => w['user_id'] == userId).toList()
         ..sort((a, b) => DateTime.parse(b['started_at'])
             .toUtc()
