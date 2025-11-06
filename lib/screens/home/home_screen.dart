@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
+import 'package:gym_tracker/screens/home/home_calendar_sheet.dart';
 import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 import 'package:gym_tracker/theme/theme.dart' show BrandColors;
@@ -62,7 +63,10 @@ class HomeScreen extends StatelessWidget {
                     );
                   }
                   final stats = snap.data ?? const HomeStats(0, 0.0, '—', null, '—');
-                  return _SummaryGrid(items: stats.toItems());
+                  final items = stats.toItems(
+                    onTapWeekly: (ctx) => showHomeCalendarSheet(ctx),
+                  );
+                  return _SummaryGrid(items: items);
                 },
               );
             },
@@ -106,13 +110,14 @@ extension on HomeStats {
     return '/sessions/$id';
   }
 
-  List<_StatItem> toItems() => [
+  List<_StatItem> toItems({void Function(BuildContext context)? onTapWeekly}) => [
         _StatItem(
           'This Week',
           weeklySessions.toString(),
           'sessions',
           Icons.calendar_today_rounded,
           '/',
+          onTap: onTapWeekly,
         ),
         _StatItem(
           'Trend — $favouriteExercise',
@@ -281,7 +286,7 @@ class _SummaryGrid extends StatelessWidget {
 
 class _StatItem {
   const _StatItem(this.title, this.value, this.suffix, this.icon, this.route,
-      {this.positive, this.textOnly = false, this.subtitle});
+      {this.positive, this.textOnly = false, this.subtitle, this.onTap});
   final String title;
   final String value;
   final String? suffix;
@@ -290,6 +295,7 @@ class _StatItem {
   final bool? positive;
   final bool textOnly;
   final String? subtitle;
+  final void Function(BuildContext context)? onTap;
 }
 
 class _StatCard extends StatelessWidget {
@@ -305,6 +311,10 @@ class _StatCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
+        if (item.onTap != null) {
+          item.onTap!(context);
+          return;
+        }
         if (item.route.startsWith('/sessions/')) {
           context.push(item.route);
         } else {
