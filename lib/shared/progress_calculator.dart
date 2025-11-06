@@ -70,17 +70,15 @@ class ProgressCalculator {
       final latest = sets
           .map((s) => s.createdAt)
           .reduce((a, b) => a.isAfter(b) ? a : b);
-      final totalWeight =
-          sets.fold<double>(0, (prev, s) => prev + s.weight);
-      final avgWeight = totalWeight / sets.length;
-
-      sets.sort((a, b) => b.weight.compareTo(a.weight));
-      final heaviest = sets.first;
+      final totalWeight = sets.fold<double>(0.0, (prev, set) => prev + set.weight);
+      final totalReps = sets.fold<int>(0, (prev, set) => prev + set.reps);
+      final double avgWeight = sets.isEmpty ? 0.0 : totalWeight / sets.length;
+      final double avgReps = sets.isEmpty ? 0.0 : totalReps / sets.length;
 
       return ProgressPoint(
         date: latest,
         yWeight: avgWeight,
-        reps: heaviest.reps,
+        reps: avgReps.round(),
         label: avgWeight.toStringAsFixed(1),
       );
     }).toList();
@@ -105,4 +103,3 @@ class ProgressCalculator {
     }).toList();
   }
 }
-

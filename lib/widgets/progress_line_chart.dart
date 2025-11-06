@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../shared/progress_types.dart';
@@ -43,7 +45,7 @@ class _ProgressLineChartPainter extends CustomPainter {
     final tpStyle = const TextStyle(color: Color(0xFF333333), fontSize: 11);
 
     const leftPad = 36.0;
-    const bottomPad = 22.0;
+    const bottomPad = 40.0;
     final chartW = size.width - leftPad;
     final chartH = size.height - bottomPad;
 
@@ -60,17 +62,55 @@ class _ProgressLineChartPainter extends CustomPainter {
     }
     final yRange = (maxY - minY).clamp(1e-6, double.infinity);
 
-    final minX = points.first.date.millisecondsSinceEpoch.toDouble();
-    final maxX = points.last.date.millisecondsSinceEpoch.toDouble();
-    final xRange = (maxX - minX).clamp(1, double.infinity);
+    final weekCounts = <DateTime, int>{};
+    for (final point in points) {
+      final week = _weekStart(point.date);
+      weekCounts[week] = (weekCounts[week] ?? 0) + 1;
+    }
 
-    double xFor(DateTime d) => leftPad + ((d.millisecondsSinceEpoch - minX) / xRange) * chartW;
+    final earliestWeek = weekCounts.keys.reduce((a, b) => a.isBefore(b) ? a : b);
+    final weekOffsets = <DateTime, int>{};
+    final ordinalPerWeek = <DateTime, int>{};
+    final positions = List<double>.filled(points.length, 0);
+
+    for (int i = 0; i < points.length; i++) {
+      final point = points[i];
+      final week = _weekStart(point.date);
+      final base = weekOffsets.putIfAbsent(
+        week,
+        () => week.difference(earliestWeek).inDays ~/ 7,
+      ).toDouble();
+      final ordinal = ordinalPerWeek[week] ?? 0;
+      final total = weekCounts[week]!;
+
+      double offset = 0;
+      if (total > 1) {
+        final fraction = total == 1 ? 0.0 : ordinal / (total - 1);
+        offset = (fraction - 0.5) * 0.6; // spread within the week slot
+      }
+
+      positions[i] = base + offset;
+      ordinalPerWeek[week] = ordinal + 1;
+    }
+
+    final minPos = positions.reduce(math.min);
+    final maxPos = positions.reduce(math.max);
+    final posRange = maxPos - minPos;
+    final denom = posRange.abs() < 1e-6 ? 1.0 : posRange;
+    final xPositions = List<double>.generate(
+      points.length,
+      (index) => leftPad + ((positions[index] - minPos) / denom) * chartW,
+    );
+
+    if (posRange.abs() < 1e-6 && points.length == 1) {
+      xPositions[0] = leftPad + chartW / 2;
+    }
     double yFor(double weight) => chartH - ((weight - minY) / yRange) * chartH;
 
     final path = Path();
     for (int i = 0; i < points.length; i++) {
       final point = points[i];
-      final x = xFor(point.date);
+      final x = xPositions[i];
       final y = yFor(point.yWeight);
       if (i == 0) {
         path.moveTo(x, y);
@@ -80,8 +120,9 @@ class _ProgressLineChartPainter extends CustomPainter {
     }
     canvas.drawPath(path, paintLine);
 
-    for (final point in points) {
-      final x = xFor(point.date);
+    for (int i = 0; i < points.length; i++) {
+      final point = points[i];
+      final x = xPositions[i];
       final y = yFor(point.yWeight);
       canvas.drawCircle(Offset(x, y), 3.5, paintDot);
 
@@ -96,6 +137,17 @@ class _ProgressLineChartPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
       repsText.paint(canvas, Offset(x - repsText.width / 2, y + 4));
+
+      final dateText = TextPainter(
+        text: TextSpan(text: _formatDate(point.date), style: tpStyle.copyWith(fontSize: 10)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      canvas.save();
+      canvas.translate(x, chartH + dateText.height + 6);
+      canvas.rotate(-math.pi / 4);
+      dateText.paint(canvas, Offset(-dateText.width, 0));
+      canvas.restore();
     }
 
     final ticks = [minY, (minY + maxY) / 2, maxY];
@@ -118,3 +170,9 @@ class _ProgressLineChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _ProgressLineChartPainter oldDelegate) => oldDelegate.points != points;
 }
 
+DateTime _weekStart(DateTime date) {
+  final local = DateTime(date.year, date.month, date.day);
+  return local.subtract(Duration(days: local.weekday - 1));
+}
+
+String _formatDate(DateTime date) => '${date.month}/${date.day}';
