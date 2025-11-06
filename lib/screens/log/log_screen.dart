@@ -243,42 +243,54 @@ class _LogScreenState extends State<LogScreen> {
 
     final selectedId = await showModalBottomSheet<int>(
       context: context,
+      isScrollControlled: true,
       builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: const Text('Repeat previous workout'),
-              subtitle: const Text('Pick one of your recent sessions'),
-              trailing: IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => Navigator.pop(ctx),
-              ),
-            ),
-            const Divider(height: 1),
-            SizedBox(
-              height: 320,
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: workouts.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final w = workouts[index];
-                  final wid = (w['id'] as num?)?.toInt();
-                  final startedAt = (w['started_at'] ?? '').toString();
-                  final label = formatIso8601ToLocal(startedAt);
-                  return ListTile(
-                    leading: const Icon(Icons.history),
-                    title: Text(
-                      w['name']?.toString().isNotEmpty == true ? w['name'].toString() : 'Workout',
+        minimum: const EdgeInsets.only(top: 12),
+        child: Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(ctx).bottom),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: constraints.maxHeight),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    ListTile(
+                      title: const Text('Repeat previous workout'),
+                      subtitle: const Text('Pick one of your recent sessions'),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
                     ),
-                    subtitle: Text(label),
-                    onTap: wid == null ? null : () => Navigator.pop(ctx, wid),
-                  );
-                },
-              ),
-            ),
-          ],
+                    const Divider(height: 1),
+                    Flexible(
+                      child: ListView.separated(
+                        itemCount: workouts.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, index) {
+                          final w = workouts[index];
+                          final wid = (w['id'] as num?)?.toInt();
+                          final startedAt = (w['started_at'] ?? '').toString();
+                          final label = formatIso8601ToLocal(startedAt);
+                          return ListTile(
+                            leading: const Icon(Icons.history),
+                            title: Text(
+                              w['name']?.toString().isNotEmpty == true
+                                  ? w['name'].toString()
+                                  : 'Workout',
+                            ),
+                            subtitle: Text(label),
+                            onTap: wid == null ? null : () => Navigator.pop(ctx, wid),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -559,7 +571,8 @@ class _LogScreenState extends State<LogScreen> {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
+            Flexible(
+              fit: FlexFit.tight,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -579,24 +592,32 @@ class _LogScreenState extends State<LogScreen> {
       );
     } else {
       children.add(
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          alignment: WrapAlignment.spaceBetween,
           children: <Widget>[
-            Chip(label: Text('Timer: $time')),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  _running = !_running;
-                  if (_running) {
-                    _ticker.start();
-                  } else {
-                    _ticker.pause();
-                  }
-                });
-              },
-              icon: Icon(_running ? Icons.pause : Icons.play_arrow),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Chip(label: Text('Timer: $time')),
+                const SizedBox(width: 8),
+                IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _running = !_running;
+                      if (_running) {
+                        _ticker.start();
+                      } else {
+                        _ticker.pause();
+                      }
+                    });
+                  },
+                  icon: Icon(_running ? Icons.pause : Icons.play_arrow),
+                ),
+              ],
             ),
-            const Spacer(),
             FilledButton.icon(
               onPressed: _addExerciseFlow,
               icon: const Icon(Icons.add),
@@ -706,7 +727,8 @@ class _LogScreenState extends State<LogScreen> {
                               label: Text(ex.restRunning ? 'Stop rest' : 'Start rest'),
                             ),
                             const SizedBox(width: 12),
-                            Expanded(
+                            Flexible(
+                              fit: FlexFit.tight,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -760,7 +782,8 @@ class _LogScreenState extends State<LogScreen> {
                               children: <Widget>[
                                 SizedBox(width: 32, child: Center(child: Text('$displayIndex'))),
                                 const SizedBox(width: 8),
-                                Expanded(
+                                Flexible(
+                                  fit: FlexFit.tight,
                                   child: TextField(
                                     controller: s.weight,
                                     focusNode: s.weightFocus,
@@ -776,7 +799,8 @@ class _LogScreenState extends State<LogScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                Expanded(
+                                Flexible(
+                                  fit: FlexFit.tight,
                                   child: TextField(
                                     controller: s.reps,
                                     focusNode: s.repsFocus,
@@ -920,11 +944,52 @@ class _LogScreenState extends State<LogScreen> {
     final textTheme = Theme.of(context).textTheme;
     final scheme = Theme.of(context).colorScheme;
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 720;
+        final horizontalPadding = isWide ? 32.0 : 16.0;
+        final options = <Widget>[
+          _StartOptionCard(
+            icon: Icons.flash_on_outlined,
+            title: 'Start new workout',
+            subtitle: 'Build a fresh session from scratch.',
+            onTap: _startNewWorkout,
+          ),
+          _StartOptionCard(
+            icon: Icons.history_rounded,
+            title: 'Repeat previous workout',
+            subtitle: 'Load exercises and sets from a recent session.',
+            onTap: _repeatPreviousFlow,
+          ),
+        ];
+
+        final optionLayout = isWide
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < options.length; i++)
+                    Flexible(
+                      child: Padding(
+                        padding: EdgeInsets.only(right: i < options.length - 1 ? 12 : 0),
+                        child: options[i],
+                      ),
+                    ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < options.length; i++)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: i < options.length - 1 ? 12 : 0),
+                      child: options[i],
+                    ),
+                ],
+              );
+
+        final content = Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(Icons.fitness_center, size: 56, color: scheme.primary),
             const SizedBox(height: 16),
@@ -934,25 +999,7 @@ class _LogScreenState extends State<LogScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.flash_on_outlined),
-                title: const Text('Start new workout'),
-                subtitle: const Text('Build a fresh session from scratch.'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: _startNewWorkout,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.history_rounded),
-                title: const Text('Repeat previous workout'),
-                subtitle: const Text('Load exercises and sets from a recent session.'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: _repeatPreviousFlow,
-              ),
-            ),
+            optionLayout,
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: () => context.push('/library'),
@@ -960,8 +1007,27 @@ class _LogScreenState extends State<LogScreen> {
               label: const Text('Browse templates in Library'),
             ),
           ],
-        ),
-      ),
+        );
+
+        return SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPadding,
+            vertical: 24,
+          ),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: isWide ? 720 : double.infinity,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: content,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1011,7 +1077,8 @@ class _LogScreenState extends State<LogScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Expanded(
+                    Flexible(
+                      fit: FlexFit.tight,
                       child: filtered.isEmpty
                           ? const Center(child: Text('No exercises found'))
                           : ListView.builder(
@@ -1243,6 +1310,33 @@ class _LogScreenState extends State<LogScreen> {
             : null,
       ),
       body: inWorkout ? _buildWorkoutBody(time) : _buildStartOptions(context),
+    );
+  }
+}
+
+class _StartOptionCard extends StatelessWidget {
+  const _StartOptionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
+      ),
     );
   }
 }

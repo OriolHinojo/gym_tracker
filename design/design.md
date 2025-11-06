@@ -25,6 +25,7 @@
   - `/more` → **More**
   - `/workout/:id` → deep link that opens **Log** preloaded for editing an existing workout.
 - Theme mode (system / light / dark) controlled globally via Riverpod (`theme/mode_provider.dart`).
+- `MaterialApp.builder` wraps all routes in a `SafeArea` (top + sides) so content stays clear of status-bar/camera insets; bottom insets are delegated to the scaffold-specific layouts (e.g. navigation bar shell).
 
 ---
 
@@ -63,6 +64,7 @@
   - Sessions logged this week (count from `LocalStore.getHomeStats()`).
   - e1RM delta vs. previous week for the favourite exercise (auto-selected or user-set).
   - Exercises performed in the most recent session.
+- Cards are laid out with a responsive `Wrap` + `Flexible` sizing, switching between 1/2/3 columns without hard-coded widths to keep spacing consistent on phones, tablets, and desktop.
 - Content updates through `ValueListenableBuilder` hooked to `preferredExerciseIdListenable`.
 - Recent sessions list now ships an inline “eye” icon that opens the shared session preview bottom sheet. The sheet uses the centralised `SessionDetail` loader and renders the new primary-container header card with workout metadata chips; exercise cards stay collapsed by default for a quick skim and expand to larger weight/rep typography on demand.
 - “Highlights” card is currently static placeholder copy.
@@ -74,6 +76,7 @@
 
 ### Entry points
 - Choose between starting fresh, repeating a previous workout, or jumping to Library templates.
+- Start options panel is built with a `LayoutBuilder` breakpoint (wide rows vs. stacked column) and `Flexible` cards so it adapts cleanly to landscape tablets/desktop without fixed widths.
 - Optional deep links:
   - `templateId` (GoRouter `extra`) loads saved workout templates as editable drafts.
   - `/workout/:id` loads past workout sets as read-only placeholders (checkboxes default unchecked).
@@ -92,6 +95,7 @@
 - “Add exercise” bottom sheet:
   - Searchable list of all exercises from `LocalStore`.
   - “Create new exercise” uses the shared dialog and automatically inserts the new entry, dropping straight into edit mode.
+- “Repeat previous workout” sheet is `isScrollControlled` with `SafeArea` padding and a `Flexible` list, so tall histories can scroll without being clipped under camera cut-outs.
 - The dedicated workout detail screen now reuses the shared session header + exercise list widgets, ensuring the collapsible set cards behave the same way as in previews (tap to expand sets, weight/reps hidden by default, tags surfaced).
 
 ### Actions
@@ -152,6 +156,11 @@
 - `formatting.dart`: shared helpers for consistent date/time formatting across screens.
 - `create_exercise_dialog.dart`: reusable flow for adding exercises with predefined categories and optional custom label.
 - `Ticker` (within `log_screen.dart`): minimal stopwatch helper around `Stopwatch`.
+
+### Layout conventions
+
+- Flex-heavy surfaces (Home summary cards, Log start panel, rest timer rows, add-exercise sheet) now prefer `Flexible` with explicit `FlexFit` choices instead of hard-coded widths so compact devices avoid overflow while large layouts can breathe.
+- For horizontal action clusters that may overflow (e.g. controls paired with large buttons or chip groups), lean on `Wrap` or mix `Flexible(fit: FlexFit.loose)` with spacing widgets rather than introducing rigid constraints.
 
 ---
 

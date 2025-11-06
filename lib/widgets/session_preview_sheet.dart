@@ -63,7 +63,8 @@ class SessionPreviewSheet extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(
+                    Flexible(
+                      fit: FlexFit.tight,
                       child: Text(
                         title ?? 'Session Preview',
                         style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
@@ -77,7 +78,8 @@ class SessionPreviewSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Expanded(
+                Flexible(
+                  fit: FlexFit.tight,
                   child: ListView(
                     children: [
                       SessionHeaderCard(

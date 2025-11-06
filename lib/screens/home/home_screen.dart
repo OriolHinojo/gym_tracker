@@ -261,21 +261,38 @@ class _SummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final cross = c.maxWidth >= 560 ? 3 : 1;
-      return GridView.builder(
-        itemCount: items.length,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cross,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: cross == 1 ? 2.8 : 1.9,
-        ),
-        itemBuilder: (_, i) => _StatCard(items[i]),
-      );
-    });
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 12.0;
+        final viewportWidth = constraints.maxWidth.isFinite && constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width;
+        final columns = viewportWidth >= 920
+            ? 3
+            : viewportWidth >= 620
+                ? 2
+                : 1;
+        final totalSpacing = spacing * (columns - 1);
+        final itemWidth = columns <= 1
+            ? viewportWidth
+            : ((viewportWidth - totalSpacing) > 0
+                    ? (viewportWidth - totalSpacing)
+                    : viewportWidth) /
+                columns;
+
+        return Wrap(
+          spacing: columns > 1 ? spacing : 0,
+          runSpacing: spacing,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: itemWidth,
+                child: _StatCard(item),
+              ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -331,7 +348,8 @@ class _StatCard extends StatelessWidget {
                 child: Icon(item.icon, size: 20, color: scheme.onPrimaryContainer),
               ),
               const SizedBox(width: 12),
-              Expanded(
+              Flexible(
+                fit: FlexFit.tight,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

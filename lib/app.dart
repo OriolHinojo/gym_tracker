@@ -22,6 +22,16 @@ class IronPulseApp extends ConsumerWidget {
       darkTheme: dark,
       themeMode: mode, // <-- controlled by Riverpod
       routerConfig: router,
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return SafeArea(
+          top: true,
+          bottom: false,
+          left: true,
+          right: true,
+          child: child,
+        );
+      },
     );
   }
 }

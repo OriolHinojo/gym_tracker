@@ -94,7 +94,8 @@ class SessionHeaderCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
+                    Flexible(
+                      fit: FlexFit.tight,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -114,7 +115,8 @@ class SessionHeaderCard extends StatelessWidget {
                                 color: onContainer.withOpacity(0.8),
                               ),
                               const SizedBox(width: 6),
-                              Expanded(
+                              Flexible(
+                                fit: FlexFit.tight,
                                 child: Text(
                                   _subtitle(),
                                   style: textTheme.bodySmall?.copyWith(

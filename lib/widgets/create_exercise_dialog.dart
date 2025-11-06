@@ -99,8 +99,8 @@ Future<_ExerciseDialogResult?> _showExerciseDialog(
             title: Text(title),
             content: SingleChildScrollView(
               padding: EdgeInsets.only(bottom: MediaQuery.of(dialogCtx).viewInsets.bottom),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 360),
+              child: SizedBox(
+                width: _dialogContentWidth(dialogCtx, 360),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -191,4 +191,13 @@ String? _resolveCategoryValue(String? category) {
     }
   }
   return null;
+}
+
+double _dialogContentWidth(BuildContext context, double fallbackWidth) {
+  final size = MediaQuery.sizeOf(context);
+  final available = size.width - 48; // default dialog horizontal insets
+  if (!available.isFinite || available <= 0) {
+    return fallbackWidth;
+  }
+  return available;
 }

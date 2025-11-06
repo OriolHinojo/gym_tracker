@@ -108,7 +108,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         builder: (ctx, setD) => AlertDialog(
           title: const Text('New Workout Template'),
           content: SizedBox(
-            width: 420,
+            width: _dialogContentWidth(ctx, 420),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -156,6 +156,15 @@ class _LibraryScreenState extends State<LibraryScreen>
       ),
     );
   }
+
+  double _dialogContentWidth(BuildContext context, double fallbackWidth) {
+    final size = MediaQuery.sizeOf(context);
+    final available = size.width - 48; // approximate dialog padding
+    if (!available.isFinite || available <= 0) {
+      return fallbackWidth;
+    }
+    return available;
+  }
 }
 
 /* ------------------------------- Exercises ------------------------------- */
@@ -182,7 +191,8 @@ class _ExercisesTabState extends State<_ExercisesTab> {
             onChanged: (v) => widget.onQuery(v.trim()),
           ),
         ),
-        Expanded(
+        Flexible(
+          fit: FlexFit.tight,
           child: FutureBuilder<List<Map<String, dynamic>>>(
             future: LocalStore.instance.listExercisesRaw(),
             builder: (context, snapshot) {
@@ -603,7 +613,8 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 12),
-                        Expanded(
+                        Flexible(
+                          fit: FlexFit.tight,
                           child: ProgressLineChart(points: vm.series),
                         ),
                       ],

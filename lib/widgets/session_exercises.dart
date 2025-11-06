@@ -122,7 +122,8 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
             children: [
               Row(
                 children: [
-                  Expanded(
+                  Flexible(
+                    fit: FlexFit.tight,
                     child: Text(
                       widget.exercise.name,
                       style: Theme.of(context).textTheme.titleMedium,

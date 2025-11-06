@@ -317,7 +317,8 @@ class _TemplatesTabState extends State<_TemplatesTab> {
           children: [
             Row(
               children: [
-                Expanded(
+                Flexible(
+                  fit: FlexFit.tight,
                   child: DropdownButtonFormField<int>(
                     value: vm.selectedTemplateId,
                     decoration: const InputDecoration(
@@ -700,7 +701,8 @@ class _ExercisesTabState extends State<_ExercisesTab> {
           children: [
             Row(
               children: [
-                Expanded(
+                Flexible(
+                  fit: FlexFit.tight,
                   child: DropdownButtonFormField<int>(
                     value: vm.selectedExerciseId,
                     decoration: const InputDecoration(
@@ -913,7 +915,8 @@ class _VolumeMiniChart extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: points.map((point) {
         final double proportion = maxValue == 0 ? 0.05 : (point.value / maxValue).clamp(0.05, 1.0);
-        return Expanded(
+        return Flexible(
+          fit: FlexFit.tight,
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 2),
             height: 120 * proportion,
@@ -1026,12 +1029,14 @@ class _TimeOfDayBarChart extends StatelessWidget {
         children: [
           _YAxis(ticks: ticks, chartHeight: chartHeight, textTheme: textTheme),
           const SizedBox(width: 16),
-          Expanded(
+          Flexible(
+            fit: FlexFit.tight,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: entries
                   .map(
-                    (entry) => Expanded(
+                    (entry) => Flexible(
+                      fit: FlexFit.tight,
                       child: _TimeBucketBars(
                         entry: entry,
                         maxVolume: maxVolume,
@@ -1271,7 +1276,8 @@ class _ChartCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(subtitle, style: theme.textTheme.bodySmall),
               const SizedBox(height: 12),
-              Expanded(
+              Flexible(
+                fit: FlexFit.tight,
                 child: ProgressLineChart(points: points),
               ),
             ],
