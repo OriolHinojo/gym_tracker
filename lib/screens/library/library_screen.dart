@@ -422,56 +422,121 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
     );
   }
 
-  void _showPreview(
+  Future<void> _showPreview(
     BuildContext context,
     int templateId,
     String name,
     List<int> exerciseIds,
-  ) {
-    final future = () async {
-      final all = await LocalStore.instance.listExercisesRaw();
-      final byId = <int, Map<String, dynamic>>{
-        for (final item in all)
-          if (item['id'] != null) (item['id'] as num).toInt(): item,
-      };
-      final exercises = await Future.wait(exerciseIds.map((exId) async {
-        final data = byId[exId];
-        final exName = (data?['name'] ?? 'Exercise #$exId').toString();
-        final history = await LocalStore.instance.listLatestSetsForExerciseRaw(
-          exId,
-          templateId: templateId,
-        );
-        final sets = history
-            .map(
-              (row) => SessionSet(
-                ordinal: (row['ordinal'] as num?)?.toInt() ?? 0,
-                reps: (row['reps'] as num?)?.toInt() ?? 0,
-                weight: (row['weight'] as num?)?.toDouble() ?? 0,
-              ),
-            )
-            .toList();
-        return SessionExercise(name: exName, sets: sets);
-      }));
-      final resolvedName = name.trim().isEmpty ? 'Workout Template' : name;
-      final templateNotes = exercises.isEmpty
-          ? 'Template contains no exercises yet.'
-          : 'Shows the most recent logged sets for each exercise (per template when available).';
-      return SessionDetail(
-        id: 0,
-        name: resolvedName,
-        startedAt: null,
-        notes: templateNotes,
-        exercises: exercises,
-      );
-    }();
-
+  ) async {
     final resolvedName = name.trim().isEmpty ? 'Workout Template' : name;
+    final latestWorkout = await _latestWorkoutForTemplate(templateId);
+    if (!mounted) return;
+
+    SessionPreviewAction? action;
+    Future<SessionDetail> future;
+    String? subtitle = 'Template preview';
+
+    if (latestWorkout != null) {
+      final workoutId = (latestWorkout['id'] as num?)?.toInt();
+      if (workoutId != null) {
+        future = loadSessionDetail(workoutId);
+        subtitle = null;
+        action = SessionPreviewAction(
+          label: 'Edit',
+          onPressed: (sheetContext, detail) {
+            Navigator.of(sheetContext).pop();
+            if (!context.mounted) return;
+            context.go('/log', extra: {'editWorkoutId': detail.id});
+          },
+          isVisible: (detail) => detail.id > 0,
+        );
+      } else {
+        future = _buildTemplatePreview(templateId, exerciseIds, resolvedName);
+      }
+    } else {
+      future = _buildTemplatePreview(templateId, exerciseIds, resolvedName);
+    }
+
     showSessionPreviewSheet(
       context,
       sessionFuture: future,
       title: resolvedName,
-      subtitle: 'Template preview',
+      subtitle: subtitle,
+      primaryAction: action,
     );
+  }
+
+  Future<SessionDetail> _buildTemplatePreview(
+    int templateId,
+    List<int> exerciseIds,
+    String resolvedName,
+  ) async {
+    final all = await LocalStore.instance.listExercisesRaw();
+    final byId = <int, Map<String, dynamic>>{
+      for (final item in all)
+        if (item['id'] != null) (item['id'] as num).toInt(): item,
+    };
+    final exercises = await Future.wait(exerciseIds.map((exId) async {
+      final data = byId[exId];
+      final exName = (data?['name'] ?? 'Exercise #$exId').toString();
+      final history = await LocalStore.instance.listLatestSetsForExerciseRaw(
+        exId,
+        templateId: templateId,
+      );
+      final sets = history
+          .map(
+            (row) => SessionSet(
+              ordinal: (row['ordinal'] as num?)?.toInt() ?? 0,
+              reps: (row['reps'] as num?)?.toInt() ?? 0,
+              weight: (row['weight'] as num?)?.toDouble() ?? 0,
+            ),
+          )
+          .toList();
+      return SessionExercise(name: exName, sets: sets);
+    }));
+    final templateNotes = exercises.isEmpty
+        ? 'Template contains no exercises yet.'
+        : 'Shows the most recent logged sets for each exercise (per template when available).';
+    return SessionDetail(
+      id: 0,
+      name: resolvedName,
+      startedAt: null,
+      notes: templateNotes,
+      exercises: exercises,
+    );
+  }
+
+  Future<Map<String, dynamic>?> _latestWorkoutForTemplate(int templateId) async {
+    const userId = 1;
+    final workouts = await LocalStore.instance.listWorkoutsRaw();
+    Map<String, dynamic>? latest;
+    DateTime? latestStartedAt;
+
+    for (final row in workouts) {
+      final uid = (row['user_id'] as num?)?.toInt() ?? userId;
+      if (uid != userId) continue;
+      final rowTemplate = (row['template_id'] as num?)?.toInt();
+      if (rowTemplate != templateId) continue;
+      final startedRaw = (row['started_at'] ?? '').toString();
+      final startedAt = DateTime.tryParse(startedRaw);
+      if (latest == null) {
+        latest = Map<String, dynamic>.from(row);
+        latestStartedAt = startedAt;
+        continue;
+      }
+      if (startedAt == null && latestStartedAt != null) continue;
+      if (startedAt == null && latestStartedAt == null) {
+        latest = Map<String, dynamic>.from(row);
+        continue;
+      }
+      if (startedAt != null &&
+          (latestStartedAt == null || startedAt.isAfter(latestStartedAt!))) {
+        latest = Map<String, dynamic>.from(row);
+        latestStartedAt = startedAt;
+      }
+    }
+
+    return latest;
   }
 
   Future<void> _confirmDelete(BuildContext context, int id, String name) async {

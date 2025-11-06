@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
-import 'package:gym_tracker/widgets/session_exercises.dart';
-import 'package:gym_tracker/widgets/session_header.dart';
+import 'package:gym_tracker/widgets/session_detail_body.dart';
+import 'package:gym_tracker/widgets/session_primary_action_button.dart';
 
 class WorkoutDetailScreen extends StatefulWidget {
   const WorkoutDetailScreen({super.key, required this.id});
@@ -89,10 +89,9 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         builder: (context, snapshot) {
           final vm = snapshot.data;
           if (vm == null) return const SizedBox.shrink();
-          return FloatingActionButton.extended(
+          return SessionPrimaryActionButton(
+            label: 'Edit',
             onPressed: () => context.go('/log', extra: {'editWorkoutId': vm.id}),
-            icon: const Icon(Icons.edit),
-            label: const Text('Edit'),
           );
         },
       ),
@@ -107,14 +106,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           }
 
           final vm = snapshot.data!;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              SessionHeaderCard(detail: vm),
-              const SizedBox(height: 16),
-              SessionExercisesList(exercises: vm.exercises),
-            ],
-          );
+          return SessionDetailBody(detail: vm);
         },
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart' as exercise_icons;
 import 'package:gym_tracker/shared/formatting.dart';
@@ -273,11 +274,20 @@ class _HomeCalendarSheetState extends State<_HomeCalendarSheet> {
                               subtitle: Text(subtitle),
                               trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
                               onTap: () {
+                                final rootContext = context;
                                 showSessionPreviewSheet(
-                                  context,
+                                  rootContext,
                                   title: session.name,
                                   subtitle: formatDateTimeYmdHm(session.startedAt),
                                   sessionFuture: loadSessionDetail(session.id),
+                                  primaryAction: SessionPreviewAction(
+                                    label: 'Edit',
+                                    onPressed: (sheetContext, detail) {
+                                      Navigator.of(sheetContext).pop();
+                                      if (!rootContext.mounted) return;
+                                      rootContext.go('/log', extra: {'editWorkoutId': detail.id});
+                                    },
+                                  ),
                                 );
                               },
                             ),

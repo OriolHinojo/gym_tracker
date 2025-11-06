@@ -18,8 +18,8 @@ Exercise and workout template hub with search/filter, CRUD dialogs, and session 
 
 **Public API (surface area)**
 - Exposed widgets/classes: `LibraryScreen`.
-- Navigation: `context.pushNamed('exerciseDetail', pathParameters: {'id': ...})`; templates tab uses `context.pushNamed('log', extra: {'templateId': id})`; preview sheet shows recent session via `showSessionPreviewSheet`.
-- Events/commands: FAB opens `showCreateExerciseDialog` or template dialog; long-press shows edit/delete bottom sheet; template dialog persists selections.
+- Navigation: `context.pushNamed('exerciseDetail', pathParameters: {'id': ...})`; templates tab uses `context.pushNamed('log', extra: {'templateId': id})`; preview sheet loads either the latest logged session (when available) or a template summary via `showSessionPreviewSheet`.
+- Events/commands: FAB opens `showCreateExerciseDialog` or template dialog; long-press shows edit/delete bottom sheet; template dialog persists selections; preview action button routes to `/log` with `editWorkoutId` when a real session exists.
 
 **Data & Services**
 - Models/DTOs: Works with raw `LocalStore` maps; uses `ProgressCalculator` and `ProgressPoint` for charts in previews.
@@ -36,7 +36,7 @@ Exercise and workout template hub with search/filter, CRUD dialogs, and session 
 - How to run: `flutter test` (full suite) after overriding `LocalStore` directory.
 - Notable test helpers/mocks: Use `LocalStore.overrideAppDirectory` before launching screen in widget tests.
 
-**Gotchas & Conventions**
+- **Template previews:** If no logged session matches a template, the preview falls back to synthetic data and omits the edit button; this keeps the shared widget consistent with Home calendar behaviour.
 - Exercise long-press bottom sheet exposes destructive delete—ensure confirmation dialog remains in sync with `LocalStore` cleanup.
 - Template preview combos volumes/tags via shared widgets; ensure analytics filters align with `ProgressScreen`.
 - Refresh tokens increment to reload template list—keep when adding new state.

@@ -9,7 +9,7 @@ Workout logging and editing flow with stopwatch, template replay, set management
 
 **How It Fits In**
 - Entry point(s): GoRouter branch `/log` (`log` route) and deep links `/workout/:id` (extra `workoutId`) or `/log` extras (`templateId`, `editWorkoutId`); detail screen at `/sessions/:id`.
-- Upstream deps: `LocalStore` for CRUD, `SessionDetail` loader, shared widgets (`SessionHeaderCard`, `SessionExercisesList`, `SessionPreviewSheet`), `SetTag` helpers, `Ticker` from `flutter/scheduler`.
+- Upstream deps: `LocalStore` for CRUD, `SessionDetail` loader, shared widgets (`SessionDetailBody`, `SessionPrimaryActionButton`, `SessionPreviewSheet`), `SetTag` helpers, `Ticker` from `flutter/scheduler`.
 - Downstream consumers: Navigates back to home/progress via `context.go`; editing route returns to `/log` with populated drafts.
 
 **State & Architecture**
