@@ -221,7 +221,7 @@ class _RecentSessionsCard extends StatelessWidget {
           title: Text(name, style: textTheme.bodyLarge),
           subtitle: Text(_formatTimestamp(started), style: textTheme.bodySmall),
           trailing: const Icon(Icons.chevron_right_rounded),
-          onTap: () => context.go('/sessions/$id'),
+          onTap: () => context.push('/sessions/$id'),
         ),
       );
 
@@ -304,7 +304,13 @@ class _StatCard extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => context.go(item.route),
+      onTap: () {
+        if (item.route.startsWith('/sessions/')) {
+          context.push(item.route);
+        } else {
+          context.go(item.route);
+        }
+      },
       child: Ink(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),

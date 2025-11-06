@@ -19,7 +19,7 @@ Workout logging and editing flow with stopwatch, template replay, set management
 
 **Public API (surface area)**
 - Exposed widgets/classes: `LogScreen`, `WorkoutDetailScreen`.
-- Navigation: `context.go('/log', extra: {...})` to open editor with template or existing workout; detail FAB navigates to `/log` for editing; `context.go('/sessions/$id')` for history.
+- Navigation: `context.go('/log', extra: {...})` to open editor with template or existing workout; detail FAB navigates to `/log` for editing; `context.push('/sessions/$id')` to view history without losing back navigation.
 - Events/commands: Stopwatch controls (`_ticker.start/pause`), set operations (`_addBlankSet`, `_duplicateLastSet`, `_removeSet`), discard dialog, delete workout confirm in detail view.
 
 **Data & Services**

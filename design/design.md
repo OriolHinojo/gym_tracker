@@ -26,6 +26,7 @@
   - `/workout/:id` → deep link that opens **Log** preloaded for editing an existing workout.
 - Theme mode (system / light / dark) controlled globally via Riverpod (`theme/mode_provider.dart`).
 - `MaterialApp.builder` wraps all routes in a `SafeArea` (top + sides) so content stays clear of status-bar/camera insets; bottom insets are delegated to the scaffold-specific layouts (e.g. navigation bar shell).
+- Bottom navigation scaffold uses `WillPopScope` to intercept the Android system back button: it pops in-branch stacks first, then returns to the Home tab, and only exits the app when already on Home with nothing left to pop.
 
 ---
 
@@ -65,6 +66,7 @@
   - e1RM delta vs. previous week for the favourite exercise (auto-selected or user-set).
   - Exercises performed in the most recent session.
 - Cards are laid out with a responsive `Wrap` + `Flexible` sizing, switching between 1/2/3 columns without hard-coded widths to keep spacing consistent on phones, tablets, and desktop.
+- Session drill-downs (`/sessions/:id`) use `context.push` so the system back button always returns to Home instead of quitting the app.
 - Content updates through `ValueListenableBuilder` hooked to `preferredExerciseIdListenable`.
 - Recent sessions list now ships an inline “eye” icon that opens the shared session preview bottom sheet. The sheet uses the centralised `SessionDetail` loader and renders the new primary-container header card with workout metadata chips; exercise cards stay collapsed by default for a quick skim and expand to larger weight/rep typography on demand.
 - “Highlights” card is currently static placeholder copy.
@@ -96,6 +98,7 @@
   - Searchable list of all exercises from `LocalStore`.
   - “Create new exercise” uses the shared dialog and automatically inserts the new entry, dropping straight into edit mode.
 - “Repeat previous workout” sheet is `isScrollControlled` with `SafeArea` padding and a `Flexible` list, so tall histories can scroll without being clipped under camera cut-outs.
+- Saving an edited workout now routes to the session detail via `context.push`, preserving back navigation to the editor when needed.
 - The dedicated workout detail screen now reuses the shared session header + exercise list widgets, ensuring the collapsible set cards behave the same way as in previews (tap to expand sets, weight/reps hidden by default, tags surfaced).
 
 ### Actions

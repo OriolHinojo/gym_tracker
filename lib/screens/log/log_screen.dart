@@ -1263,7 +1263,7 @@ class _LogScreenState extends State<LogScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Workout updated')));
-      context.go('/sessions/$editingId');
+      context.push('/sessions/$editingId');
       return;
     }
 

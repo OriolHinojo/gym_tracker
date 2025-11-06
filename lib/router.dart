@@ -19,38 +19,52 @@ final Provider<GoRouter> appRouterProvider = Provider((ref) {
     routes: <RouteBase>[
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) {
-          return Scaffold(
-            body: navigationShell,
-            bottomNavigationBar: NavigationBar(
-              selectedIndex: navigationShell.currentIndex,
-              destinations: const <NavigationDestination>[
-                NavigationDestination(
-                  icon: Icon(Icons.home_outlined),
-                  selectedIcon: Icon(Icons.home),
-                  label: 'Home',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.edit_outlined),
-                  selectedIcon: Icon(Icons.edit),
-                  label: 'Log',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.show_chart_outlined),
-                  selectedIcon: Icon(Icons.show_chart),
-                  label: 'Progress',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.fitness_center_outlined),
-                  selectedIcon: Icon(Icons.fitness_center),
-                  label: 'Library',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.more_horiz),
-                  selectedIcon: Icon(Icons.more_horiz),
-                  label: 'More',
-                ),
-              ],
-              onDestinationSelected: navigationShell.goBranch,
+          return WillPopScope(
+            onWillPop: () async {
+              final router = GoRouter.of(context);
+              if (router.canPop()) {
+                router.pop();
+                return false;
+              }
+              if (navigationShell.currentIndex != 0) {
+                navigationShell.goBranch(0);
+                return false;
+              }
+              return true;
+            },
+            child: Scaffold(
+              body: navigationShell,
+              bottomNavigationBar: NavigationBar(
+                selectedIndex: navigationShell.currentIndex,
+                destinations: const <NavigationDestination>[
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.edit_outlined),
+                    selectedIcon: Icon(Icons.edit),
+                    label: 'Log',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.show_chart_outlined),
+                    selectedIcon: Icon(Icons.show_chart),
+                    label: 'Progress',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.fitness_center_outlined),
+                    selectedIcon: Icon(Icons.fitness_center),
+                    label: 'Library',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.more_horiz),
+                    selectedIcon: Icon(Icons.more_horiz),
+                    label: 'More',
+                  ),
+                ],
+                onDestinationSelected: navigationShell.goBranch,
+              ),
             ),
           );
         },

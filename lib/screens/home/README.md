@@ -18,8 +18,8 @@ Landing dashboard summarising weekly activity, recent sessions, and highlights w
 
 **Public API (surface area)**
 - Exposed widgets/classes: `HomeScreen`.
-- Navigation: FAB uses `context.go('/log')`; list tiles push `/sessions/<id>`; stat cards link to `/progress` or `/`.
-- Events/commands: Preview button triggers `showSessionPreviewSheet`; highlight actions placeholder (`See all` button).
+- Navigation: FAB uses `context.go('/log')`; list tiles `context.push('/sessions/<id>')`; stat cards link to `/progress` or `/`.
+- Events/commands: Recent session tap opens the detail screen (no separate preview); highlight actions placeholder (`See all` button).
 
 **Data & Services**
 - Models/DTOs: `HomeStats` (defined in `LocalStore`), `SessionDetail`.
@@ -45,5 +45,5 @@ Landing dashboard summarising weekly activity, recent sessions, and highlights w
 - For dev work here: tweak `HomeStats` in `LocalStore` to adjust dashboard metrics.
 - Example usage:
 ```dart
-context.go('/sessions/$sessionId');
+context.push('/sessions/$sessionId');
 ```
