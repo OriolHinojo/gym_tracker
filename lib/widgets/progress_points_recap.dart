@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../shared/formatting.dart';
 import '../shared/progress_types.dart';
 
 /// Reusable card summarising the raw progress datapoints in a simple list.
@@ -29,17 +30,11 @@ class ProgressPointsRecap extends StatelessWidget {
   }
 
   Widget _buildTile(ProgressPoint point) {
-    final date = _formatDate(point.date);
+    final date = formatDateYmd(point.date.toLocal());
     return ListTile(
       dense: true,
       title: Text('$date - ${point.yWeight.toStringAsFixed(1)}'),
       trailing: Text('${point.reps} reps'),
     );
-  }
-
-  String _formatDate(DateTime d) {
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '${d.year}-$m-$day';
   }
 }

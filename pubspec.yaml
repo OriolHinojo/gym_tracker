@@ -58,6 +58,7 @@ dev_dependencies:
   build_runner: ^2.4.12
   freezed: ^2.5.7
   very_good_analysis: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -100,3 +101,22 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+flutter_launcher_icons:
+  image_path: assets/logo_gainztracker.png
+  android: true
+  ios: true
+  macos:
+    generate: true
+    image_path: assets/logo_gainztracker.png
+  web:
+    generate: true
+    image_path: assets/logo_gainztracker.png
+    background_color: "#000000"
+    theme_color: "#000000"
+  windows:
+    generate: true
+    image_path: assets/logo_gainztracker.png
+  linux:
+    generate: true
+    image_path: assets/logo_gainztracker.png

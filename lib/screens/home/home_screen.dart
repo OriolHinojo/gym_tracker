@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
+import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 import 'package:gym_tracker/theme/theme.dart' show BrandColors;
 import 'package:gym_tracker/widgets/session_preview_sheet.dart';
@@ -19,7 +20,7 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('IronPulse'),
+        title: const Text('GainzTracker'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(6),
           child: Container(
@@ -96,10 +97,7 @@ extension on HomeStats {
     if (lastWorkoutName == '—') return null;
     final dt = lastWorkoutStartedAt?.toLocal();
     if (dt == null) return 'Unknown date';
-    String two(int n) => n.toString().padLeft(2, '0');
-    final date = '${dt.year}-${two(dt.month)}-${two(dt.day)}';
-    final time = '${two(dt.hour)}:${two(dt.minute)}';
-    return '$date · $time';
+    return '${formatDateYmd(dt)} · ${formatTimeHm(dt)}';
   }
 
   String get lastWorkoutRoute {
@@ -251,14 +249,8 @@ class _RecentSessionsCard extends StatelessWidget {
     return tiles;
   }
 
-  String _formatTimestamp(String iso) {
-    final dt = DateTime.tryParse(iso)?.toLocal();
-    if (dt == null) return 'Unknown date';
-    String two(int n) => n.toString().padLeft(2, '0');
-    final date = '${dt.year}-${two(dt.month)}-${two(dt.day)}';
-    final time = '${two(dt.hour)}:${two(dt.minute)}';
-    return '$date · $time';
-  }
+  String _formatTimestamp(String iso) =>
+      formatIso8601ToLocal(iso, separator: ' · ');
 }
 
 // ---------- Summary Grid ----------

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/services/analytics/analytics_models.dart';
 import 'package:gym_tracker/services/analytics/analytics_service.dart';
+import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/progress_calculator.dart';
 import 'package:gym_tracker/shared/progress_types.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
@@ -407,7 +408,7 @@ class _TemplatesTabState extends State<_TemplatesTab> {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.fitness_center_outlined),
                   title: Text(session.name),
-                  subtitle: Text(_formatDate(session.startedAt)),
+                  subtitle: Text(formatDateYmd(session.startedAt)),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -1220,7 +1221,7 @@ class _PrCard extends StatelessWidget {
                 subtitle: Text(
                   '${_formatWeight(record.weight)} · ${record.reps} reps · 1RM ${record.estimatedOneRm.toStringAsFixed(1)}',
                 ),
-                trailing: Text(_formatDate(record.achievedAt)),
+                trailing: Text(formatDateYmd(record.achievedAt)),
               ),
             ),
           ],
@@ -1369,9 +1370,4 @@ String _formatWeight(double kilos) {
   if (kilos >= 1000) return '${(kilos / 1000).toStringAsFixed(1)}k kg';
   if (kilos >= 100) return '${kilos.toStringAsFixed(0)} kg';
   return '${kilos.toStringAsFixed(1)} kg';
-}
-
-String _formatDate(DateTime date) {
-  String two(int value) => value.toString().padLeft(2, '0');
-  return '${date.year}-${two(date.month)}-${two(date.day)}';
 }

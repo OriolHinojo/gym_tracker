@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 
 /// Header card for a session preview/detail view.
@@ -14,10 +15,10 @@ class SessionHeaderCard extends StatelessWidget {
 
   String _subtitle() {
     if (subtitleOverride != null) return subtitleOverride!;
-    final started = detail.startedAt?.toLocal();
-    if (started == null) return 'Started time unavailable';
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '${started.year}-${two(started.month)}-${two(started.day)} at ${two(started.hour)}:${two(started.minute)}';
+    return formatMaybeDateTime(
+      detail.startedAt?.toLocal(),
+      fallback: 'Started time unavailable',
+    );
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/library/library_screen.dart';
+import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
 import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
@@ -265,7 +266,7 @@ class _LogScreenState extends State<LogScreen> {
                   final w = workouts[index];
                   final wid = (w['id'] as num?)?.toInt();
                   final startedAt = (w['started_at'] ?? '').toString();
-                  final label = _formatWorkoutDate(startedAt);
+                  final label = formatIso8601ToLocal(startedAt);
                   return ListTile(
                     leading: const Icon(Icons.history),
                     title: Text(
@@ -295,20 +296,6 @@ class _LogScreenState extends State<LogScreen> {
     super.dispose();
   }
 
-  String _format(Duration d) {
-    final int m = d.inMinutes % 60;
-    final int s = d.inSeconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
-  String _formatWorkoutDate(String isoString) {
-    final dt = DateTime.tryParse(isoString)?.toLocal();
-    if (dt == null) return 'Unknown date';
-    final date = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-    final time = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    return '$date at $time';
-  }
-
   String _formatNumber(num value) {
     final double dv = value.toDouble();
     if (dv == dv.roundToDouble()) {
@@ -316,17 +303,6 @@ class _LogScreenState extends State<LogScreen> {
     }
     final formatted = dv.toStringAsFixed(2);
     return formatted.replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
-  }
-
-  String _formatClock(Duration duration) {
-    final totalSeconds = duration.inSeconds;
-    final minutes = (totalSeconds ~/ 60) % 60;
-    final seconds = totalSeconds % 60;
-    final hours = totalSeconds ~/ 3600;
-    if (hours > 0) {
-      return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    }
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 
   void _focusNode(FocusNode node) {
@@ -576,14 +552,9 @@ class _LogScreenState extends State<LogScreen> {
 
     if (editing) {
       final started = _editingStartedAt?.toLocal();
-      String subtitle;
-      if (started == null) {
-        subtitle = 'Review your logged sets below';
-      } else {
-        String two(int n) => n.toString().padLeft(2, '0');
-        subtitle =
-            'Started ${started.year}-${two(started.month)}-${two(started.day)} at ${two(started.hour)}:${two(started.minute)}';
-      }
+      final subtitle = started == null
+          ? 'Review your logged sets below'
+          : 'Started ${formatDateTimeYmdHm(started)}';
       children.add(
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -740,21 +711,21 @@ class _LogScreenState extends State<LogScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Elapsed: ${_formatClock(restElapsed)}',
+                                    'Elapsed: ${formatDurationClock(restElapsed)}',
                                     style: textTheme.bodySmall?.copyWith(color: restColor),
                                   ),
                                   Text(
-                                    'Target: ${_formatClock(ex.restTarget)}',
+                                    'Target: ${formatDurationClock(ex.restTarget)}',
                                     style: textTheme.labelMedium,
                                   ),
                                   if (ex.lastRestDuration != null)
                                     Text(
-                                      'Last: ${_formatClock(ex.lastRestDuration!)}',
+                                      'Last: ${formatDurationClock(ex.lastRestDuration!)}',
                                       style: textTheme.labelSmall?.copyWith(color: outline),
                                     ),
                                   if (overTarget)
                                     Text(
-                                      '+ ${_formatClock(restElapsed - ex.restTarget)} over target',
+                                      '+ ${formatDurationClock(restElapsed - ex.restTarget)} over target',
                                       style: textTheme.labelSmall?.copyWith(color: colorScheme.error),
                                     ),
                                 ],
@@ -1245,7 +1216,7 @@ class _LogScreenState extends State<LogScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String time = _format(_elapsed);
+    final String time = formatDurationMmSs(_elapsed);
     final bool inWorkout = _choiceMade || _exercises.isNotEmpty;
     final bool editing = _editingWorkoutId != null;
     return Scaffold(

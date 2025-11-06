@@ -23,7 +23,7 @@
   - `/library` → **Library**
   - `/library/exercise/:id` → exercise analytics detail
   - `/more` → **More**
-  - `/workout/:id` → deep link that opens **Log** with an existing workout (read-only preload).
+  - `/workout/:id` → deep link that opens **Log** preloaded for editing an existing workout.
 - Theme mode (system / light / dark) controlled globally via Riverpod (`theme/mode_provider.dart`).
 
 ---
@@ -133,9 +133,9 @@
   - Session/volume totals, time-of-day splits, and personal records.
   - Supports filters for templates, set tags, and time-of-day buckets.
 - `ProgressScreen` (`lib/screens/progress/progress_screen.dart`) surfaces:
-  - Tabbed dashboard with **Templates**, **Exercises**, and **Tags & Time** modes.
+  - Tabbed dashboard with **Templates** and **Exercises** modes.
   - Summary, volume trend, time-of-day, and PR insight cards scoped to the currently selected exercise and filter set.
-  - Template selector + modal for tag/time filters.
+  - Template selector + bottom-sheet filters for tag/time buckets.
   - Exercise-specific weight trend chart (`ProgressLineChart`) and detailed point recap.
 - Exercise detail screen reuses the same calculator and UI components, keeping analytics consistent.
 
@@ -149,6 +149,7 @@
 - `ProgressFilters`: wrap of choice chips with optional `leading` widgets for extra controls.
 - `ProgressLineChart`: lightweight `CustomPainter` line chart (no external chart dependency used despite `fl_chart` being listed).
 - `ProgressPointsRecap`: simple card listing all generated `ProgressPoint`s.
+- `formatting.dart`: shared helpers for consistent date/time formatting across screens.
 - `create_exercise_dialog.dart`: reusable flow for adding exercises with predefined categories and optional custom label.
 - `Ticker` (within `log_screen.dart`): minimal stopwatch helper around `Stopwatch`.
 

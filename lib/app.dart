@@ -17,7 +17,7 @@ class IronPulseApp extends ConsumerWidget {
     final ThemeMode mode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'IronPulse',
+      title: 'GainzTracker',
       theme: light,
       darkTheme: dark,
       themeMode: mode, // <-- controlled by Riverpod
