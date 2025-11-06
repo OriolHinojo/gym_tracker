@@ -220,24 +220,7 @@ class _RecentSessionsCard extends StatelessWidget {
           dense: true,
           title: Text(name, style: textTheme.bodyLarge),
           subtitle: Text(_formatTimestamp(started), style: textTheme.bodySmall),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.visibility_outlined),
-                tooltip: 'Preview',
-                onPressed: () {
-                  final title = name.isEmpty ? 'Session Preview' : name;
-                  showSessionPreviewSheet(
-                    context,
-                    sessionFuture: loadSessionDetail(id),
-                    title: title,
-                  );
-                },
-              ),
-              Icon(Icons.chevron_right_rounded, color: scheme.outline),
-            ],
-          ),
+          trailing: const Icon(Icons.chevron_right_rounded),
           onTap: () => context.go('/sessions/$id'),
         ),
       );
