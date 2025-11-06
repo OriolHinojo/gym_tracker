@@ -133,7 +133,8 @@
   - Session/volume totals, time-of-day splits, and personal records.
   - Supports filters for templates, set tags, and time-of-day buckets.
 - `ProgressScreen` (`lib/screens/progress/progress_screen.dart`) surfaces:
-  - Summary, volume trend, time-of-day, and PR insight cards with filter controls.
+  - Tabbed dashboard with **Templates**, **Exercises**, and **Tags & Time** modes.
+  - Summary, volume trend, time-of-day, and PR insight cards scoped to the currently selected exercise and filter set.
   - Template selector + modal for tag/time filters.
   - Exercise-specific weight trend chart (`ProgressLineChart`) and detailed point recap.
 - Exercise detail screen reuses the same calculator and UI components, keeping analytics consistent.

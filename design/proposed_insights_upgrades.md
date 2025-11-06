@@ -12,7 +12,7 @@
 - Keep the UI consistent and visually engaging across Home, Progress, and Detail screens.
 
 ### Current Status (vNext)
-- ✅ Added analytics service (volume, PRs, time-of-day) and wired summary cards into Progress screen.
+- ✅ Added analytics service (volume, PRs, time-of-day) and wired summary cards into Progress screen (scoped to selected exercise).
 - ✅ Implemented template/tag/time filters with modal UX.
 - ⏳ Still need to capture session duration/RPE/location/rest actuals.
 - ⏳ Drill-down visuals, saved views, and home-page insights strip remain outstanding.
