@@ -26,7 +26,7 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Progress'),
@@ -34,7 +34,6 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
             tabs: [
               Tab(text: 'Templates'),
               Tab(text: 'Exercises'),
-              Tab(text: 'Tags & Time'),
             ],
           ),
         ),
@@ -42,7 +41,6 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
           children: [
             _TemplatesTab(analytics: _analytics),
             _ExercisesTab(analytics: _analytics, calculator: _calculator),
-            _TagsTab(analytics: _analytics),
           ],
         ),
       ),
@@ -371,7 +369,11 @@ class _TemplatesTabState extends State<_TemplatesTab> {
               ),
             ],
             const SizedBox(height: 16),
-            _SummaryCard(snapshot: vm.analytics, contextLabel: contextLabel),
+            _SummaryCard(
+              snapshot: vm.analytics,
+              contextLabel: contextLabel,
+              lastSessionWeight: vm.sessions.isEmpty ? null : vm.sessions.first.volume,
+            ),
             const SizedBox(height: 12),
             if (vm.analytics.volumeTrend.isNotEmpty) ...[
               _VolumeTrendCard(points: vm.analytics.volumeTrend),
@@ -488,6 +490,49 @@ class _ExercisesTabState extends State<_ExercisesTab> {
       range: _range,
     );
 
+    final aggregates = <int, _ExerciseSessionAggregate>{};
+
+    for (final set in sets) {
+      final dynamic raw = set['created_at'] ?? set['started_at'];
+      if (raw == null) continue;
+      final parsed = DateTime.tryParse(raw.toString());
+      if (parsed == null) continue;
+      final local = parsed.toLocal();
+
+      if (_timeFilters.isNotEmpty) {
+        final bucket = TimeOfDayBucketX.classify(local);
+        if (!_timeFilters.contains(bucket)) continue;
+      }
+
+      if (_tagFilters.isNotEmpty) {
+        final tag = setTagFromStorage(set['tag']?.toString());
+        if (!_tagFilters.contains(tag)) continue;
+      }
+
+      final wid = (set['workout_id'] as num?)?.toInt();
+      if (wid == null) continue;
+
+      final weight = (set['weight'] as num?)?.toDouble();
+      if (weight == null) continue;
+      final reps = (set['reps'] as num?)?.toInt() ?? 1;
+
+      final aggregate = aggregates.putIfAbsent(
+        wid,
+        () => _ExerciseSessionAggregate(timestamp: local),
+      );
+      aggregate.timestamp = local.isAfter(aggregate.timestamp) ? local : aggregate.timestamp;
+      aggregate.totalWeight += weight * reps;
+    }
+
+    DateTime? bestTimestamp;
+    double? lastSessionWeight;
+    aggregates.forEach((_, aggregate) {
+      if (bestTimestamp == null || aggregate.timestamp.isAfter(bestTimestamp!)) {
+        bestTimestamp = aggregate.timestamp;
+        lastSessionWeight = aggregate.totalWeight;
+      }
+    });
+
     _selectedExerciseId = selected;
     _selectedExerciseName = name.isEmpty ? 'All exercises' : name;
 
@@ -507,6 +552,7 @@ class _ExercisesTabState extends State<_ExercisesTab> {
       range: _range,
       series: series,
       analytics: analytics,
+      lastSessionWeight: lastSessionWeight,
     );
   }
 
@@ -717,7 +763,11 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               ),
             ],
             const SizedBox(height: 16),
-            _SummaryCard(snapshot: vm.analytics, contextLabel: vm.selectedExerciseName),
+            _SummaryCard(
+              snapshot: vm.analytics,
+              contextLabel: vm.selectedExerciseName,
+              lastSessionWeight: vm.lastSessionWeight,
+            ),
             const SizedBox(height: 12),
             if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
               _TimeOfDayCard(entries: vm.analytics.volumeByTimeOfDay),
@@ -752,167 +802,19 @@ class _ExercisesTabState extends State<_ExercisesTab> {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               TAGS / TIME TAB                              */
-/* -------------------------------------------------------------------------- */
-
-class _TagsTab extends StatefulWidget {
-  const _TagsTab({required this.analytics});
-
-  final AnalyticsService analytics;
-
-  @override
-  State<_TagsTab> createState() => _TagsTabState();
-}
-
-class _TagsTabState extends State<_TagsTab> {
-  final Set<SetTag> _selectedTags = <SetTag>{};
-  final Set<TimeOfDayBucket> _selectedTimeBuckets = <TimeOfDayBucket>{};
-
-  late Future<_TagVM> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = _load();
-  }
-
-  Future<_TagVM> _load() async {
-    final analytics = await widget.analytics.snapshot(
-      filters: AnalyticsFilters(
-        tags: _selectedTags.isEmpty ? null : _selectedTags,
-        timeOfDayBuckets: _selectedTimeBuckets.isEmpty ? null : _selectedTimeBuckets,
-        includeZeroVolumeSessions: true,
-      ),
-    );
-    return _TagVM(analytics: analytics);
-  }
-
-  void _reload() {
-    setState(() {
-      _future = _load();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<_TagVM>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('Unable to load tag analytics.\n${snapshot.error}'));
-        }
-        final vm = snapshot.data!;
-        final contextLabel = _buildContextLabel();
-
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Text('Set tags', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: kAvailableSetTags
-                  .map(
-                    (tag) => FilterChip(
-                      label: Text(tag.label),
-                      selected: _selectedTags.contains(tag),
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedTags.add(tag);
-                          } else {
-                            _selectedTags.remove(tag);
-                          }
-                          _future = _load();
-                        });
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 16),
-            Text('Time of day', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: TimeOfDayBucket.values
-                  .map(
-                    (bucket) => FilterChip(
-                      label: Text(bucket.label),
-                      selected: _selectedTimeBuckets.contains(bucket),
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedTimeBuckets.add(bucket);
-                          } else {
-                            _selectedTimeBuckets.remove(bucket);
-                          }
-                          _future = _load();
-                        });
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 16),
-            if (_selectedTags.isNotEmpty || _selectedTimeBuckets.isNotEmpty)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedTags.clear();
-                      _selectedTimeBuckets.clear();
-                      _future = _load();
-                    });
-                  },
-                  child: const Text('Clear all'),
-                ),
-              ),
-            const SizedBox(height: 12),
-            _SummaryCard(snapshot: vm.analytics, contextLabel: contextLabel),
-            const SizedBox(height: 12),
-            if (vm.analytics.volumeTrend.isNotEmpty) ...[
-              _VolumeTrendCard(points: vm.analytics.volumeTrend),
-              const SizedBox(height: 12),
-            ],
-            if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
-              _TimeOfDayCard(entries: vm.analytics.volumeByTimeOfDay),
-              const SizedBox(height: 12),
-            ],
-            if (vm.analytics.personalRecords.isNotEmpty) ...[
-              _PrCard(records: vm.analytics.personalRecords),
-              const SizedBox(height: 12),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  String _buildContextLabel() {
-    final tagPart = _selectedTags.map((t) => t.label).join(', ');
-    final timePart = _selectedTimeBuckets.map((b) => b.label).join(', ');
-    if (tagPart.isEmpty && timePart.isEmpty) return 'All sessions';
-    if (tagPart.isNotEmpty && timePart.isNotEmpty) {
-      return '$tagPart · $timePart';
-    }
-    return tagPart.isNotEmpty ? tagPart : timePart;
-  }
-}
-
-/* -------------------------------------------------------------------------- */
 /*                           SHARED HELPER WIDGETS                            */
 /* -------------------------------------------------------------------------- */
 
 class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.snapshot, required this.contextLabel});
+  const _SummaryCard({
+    required this.snapshot,
+    required this.contextLabel,
+    required this.lastSessionWeight,
+  });
 
   final AnalyticsSnapshot snapshot;
   final String contextLabel;
+  final double? lastSessionWeight;
 
   @override
   Widget build(BuildContext context) {
@@ -932,8 +834,14 @@ class _SummaryCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _MetricTile(label: 'Sessions', value: snapshot.sessionCount.toString()),
-                _MetricTile(label: 'Total volume', value: _formatWeight(snapshot.totalVolume)),
-                _MetricTile(label: 'Avg / session', value: _formatWeight(snapshot.averageVolumePerSession)),
+                _MetricTile(
+                  label: 'Avg / session',
+                  value: snapshot.sessionCount == 0 ? '—' : _formatWeight(snapshot.averageVolumePerSession),
+                ),
+                _MetricTile(
+                  label: 'Last session',
+                  value: lastSessionWeight == null ? '—' : _formatWeight(lastSessionWeight!),
+                ),
               ],
             ),
           ],
@@ -1202,6 +1110,7 @@ class _ExerciseVM {
     required this.range,
     required this.series,
     required this.analytics,
+    required this.lastSessionWeight,
   });
 
   final List<_ExerciseRow> exercises;
@@ -1211,6 +1120,7 @@ class _ExerciseVM {
   final ProgressRange range;
   final List<ProgressPoint> series;
   final AnalyticsSnapshot analytics;
+  final double? lastSessionWeight;
 }
 
 class _ExerciseRow {
@@ -1220,9 +1130,11 @@ class _ExerciseRow {
   final String category;
 }
 
-class _TagVM {
-  _TagVM({required this.analytics});
-  final AnalyticsSnapshot analytics;
+class _ExerciseSessionAggregate {
+  _ExerciseSessionAggregate({required this.timestamp});
+
+  DateTime timestamp;
+  double totalWeight = 0;
 }
 
 /* -------------------------------------------------------------------------- */
