@@ -15,34 +15,48 @@ class ProgressLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return CustomPaint(
-      painter: _ProgressLineChartPainter(points),
+      painter: _ProgressLineChartPainter(
+        points: points,
+        colorScheme: theme.colorScheme,
+        textColor: theme.colorScheme.onSurface,
+        subtleTextColor: theme.colorScheme.onSurfaceVariant,
+      ),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _ProgressLineChartPainter extends CustomPainter {
-  _ProgressLineChartPainter(this.points);
+  _ProgressLineChartPainter({
+    required this.points,
+    required this.colorScheme,
+    required this.textColor,
+    required this.subtleTextColor,
+  });
 
   final List<ProgressPoint> points;
+  final ColorScheme colorScheme;
+  final Color textColor;
+  final Color subtleTextColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     final paintAxis = Paint()
-      ..color = const Color(0xFFDDDDDD)
+      ..color = colorScheme.outlineVariant.withOpacity(0.35)
       ..strokeWidth = 1;
 
     final paintLine = Paint()
-      ..color = const Color(0xFF1565C0)
+      ..color = colorScheme.primary
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
     final paintDot = Paint()
-      ..color = const Color(0xFF1565C0)
+      ..color = colorScheme.primary
       ..style = PaintingStyle.fill;
 
-    final tpStyle = const TextStyle(color: Color(0xFF333333), fontSize: 11);
+    final baseTextStyle = TextStyle(color: textColor, fontSize: 11);
 
     const leftPad = 36.0;
     const bottomPad = 40.0;
@@ -126,20 +140,27 @@ class _ProgressLineChartPainter extends CustomPainter {
       final y = yFor(point.yWeight);
       canvas.drawCircle(Offset(x, y), 3.5, paintDot);
 
+      final weightStyle = baseTextStyle.copyWith(fontWeight: FontWeight.w600);
       final weightText = TextPainter(
-        text: TextSpan(text: point.yWeight.toStringAsFixed(0), style: tpStyle.copyWith(fontWeight: FontWeight.w600)),
+        text: TextSpan(text: point.yWeight.toStringAsFixed(0), style: weightStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       weightText.paint(canvas, Offset(x - weightText.width / 2, y - 18));
 
       final repsText = TextPainter(
-        text: TextSpan(text: '${point.reps}r', style: tpStyle.copyWith(fontSize: 10, color: const Color(0xFF666666))),
+        text: TextSpan(
+          text: '${point.reps}r',
+          style: baseTextStyle.copyWith(fontSize: 10, color: subtleTextColor),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       repsText.paint(canvas, Offset(x - repsText.width / 2, y + 4));
 
       final dateText = TextPainter(
-        text: TextSpan(text: _formatDate(point.date), style: tpStyle.copyWith(fontSize: 10)),
+        text: TextSpan(
+          text: _formatDate(point.date),
+          style: baseTextStyle.copyWith(fontSize: 10, color: subtleTextColor),
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
 
@@ -154,20 +175,24 @@ class _ProgressLineChartPainter extends CustomPainter {
     for (final tick in ticks) {
       final y = yFor(tick);
       final label = TextPainter(
-        text: TextSpan(text: tick.toStringAsFixed(0), style: tpStyle),
+        text: TextSpan(text: tick.toStringAsFixed(0), style: baseTextStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       label.paint(canvas, Offset(leftPad - label.width - 6, y - label.height / 2));
 
       final guide = Paint()
-        ..color = const Color(0xFFEFEFEF)
+        ..color = colorScheme.outlineVariant.withOpacity(0.2)
         ..strokeWidth = 1;
       canvas.drawLine(Offset(leftPad + 1, y), Offset(size.width, y), guide);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _ProgressLineChartPainter oldDelegate) => oldDelegate.points != points;
+  bool shouldRepaint(covariant _ProgressLineChartPainter oldDelegate) =>
+      oldDelegate.points != points ||
+      oldDelegate.colorScheme != colorScheme ||
+      oldDelegate.textColor != textColor ||
+      oldDelegate.subtleTextColor != subtleTextColor;
 }
 
 DateTime _weekStart(DateTime date) {

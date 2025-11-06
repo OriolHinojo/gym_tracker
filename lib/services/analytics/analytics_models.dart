@@ -73,9 +73,17 @@ class TrendPoint {
 }
 
 class TimeOfDayVolume {
-  const TimeOfDayVolume({required this.bucket, required this.volume});
+  const TimeOfDayVolume({
+    required this.bucket,
+    required this.averageVolume,
+    required this.lastSessionVolume,
+    required this.sessionCount,
+  });
+
   final TimeOfDayBucket bucket;
-  final double volume;
+  final double averageVolume;
+  final double lastSessionVolume;
+  final int sessionCount;
 }
 
 class PersonalRecord {

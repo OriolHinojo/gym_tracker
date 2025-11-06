@@ -86,13 +86,11 @@ void main() {
       );
 
       expect(snapshot.sessionCount, greaterThanOrEqualTo(1));
-      expect(
-        snapshot.volumeByTimeOfDay
-            .where((entry) => entry.bucket == TimeOfDayBucket.morning)
-            .map((entry) => entry.volume)
-            .fold<double>(0, (a, b) => a + b),
-        greaterThan(0),
-      );
+      final morningEntry = snapshot.volumeByTimeOfDay
+          .firstWhere((entry) => entry.bucket == TimeOfDayBucket.morning, orElse: () => const TimeOfDayVolume(bucket: TimeOfDayBucket.morning, averageVolume: 0, lastSessionVolume: 0, sessionCount: 0));
+      expect(morningEntry.averageVolume, greaterThan(0));
+      expect(morningEntry.lastSessionVolume, greaterThan(0));
+      expect(morningEntry.sessionCount, greaterThan(0));
     });
 
     test('filters by set tags', () async {
@@ -122,4 +120,3 @@ void main() {
     });
   });
 }
-

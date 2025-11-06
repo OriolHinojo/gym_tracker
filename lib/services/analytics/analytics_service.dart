@@ -39,6 +39,10 @@ class AnalyticsService {
     final Map<TimeOfDayBucket, double> volumeByTime = {
       for (final bucket in TimeOfDayBucket.values) bucket: 0,
     };
+    final Map<TimeOfDayBucket, int> countByTime = {
+      for (final bucket in TimeOfDayBucket.values) bucket: 0,
+    };
+    final Map<TimeOfDayBucket, _BucketLatest> latestByTime = {};
 
     final DateTime? from = resolvedFilters.from?.toUtc();
     final DateTime? to = resolvedFilters.to?.toUtc();
@@ -120,6 +124,11 @@ class AnalyticsService {
       );
 
       volumeByTime[bucket] = (volumeByTime[bucket] ?? 0) + sessionVolume;
+      countByTime[bucket] = (countByTime[bucket] ?? 0) + 1;
+      final latest = latestByTime[bucket];
+      if (latest == null || localStart.isAfter(latest.startedAt)) {
+        latestByTime[bucket] = _BucketLatest(startedAt: localStart, volume: sessionVolume);
+      }
 
       final trendKey = DateUtils.dateOnly(localStart);
       trendVolume[trendKey] = (trendVolume[trendKey] ?? 0) + sessionVolume;
@@ -130,9 +139,20 @@ class AnalyticsService {
     final totalVolume = aggregates.fold<double>(0, (sum, agg) => sum + agg.volume);
     final averageVolume = totalVolume / aggregates.length;
 
-    final timeVolumes = volumeByTime.entries
-        .where((entry) => entry.value > 0)
-        .map((entry) => TimeOfDayVolume(bucket: entry.key, volume: entry.value))
+    final timeVolumes = TimeOfDayBucket.values
+        .where((bucket) => (countByTime[bucket] ?? 0) > 0)
+        .map((bucket) {
+          final total = volumeByTime[bucket] ?? 0.0;
+          final count = countByTime[bucket] ?? 0;
+          final double average = count == 0 ? 0.0 : total / count;
+          final latest = latestByTime[bucket];
+          return TimeOfDayVolume(
+            bucket: bucket,
+            averageVolume: average,
+            lastSessionVolume: latest?.volume ?? 0,
+            sessionCount: count,
+          );
+        })
         .toList();
 
     final trendPoints = trendVolume.entries
@@ -199,3 +219,9 @@ class _PersonalRecordCandidate {
   final DateTime achievedAt;
 }
 
+class _BucketLatest {
+  _BucketLatest({required this.startedAt, required this.volume});
+
+  final DateTime startedAt;
+  final double volume;
+}

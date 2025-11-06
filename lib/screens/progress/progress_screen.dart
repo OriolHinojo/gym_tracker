@@ -942,7 +942,9 @@ class _TimeOfDayCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final maxVolume = entries.map((e) => e.volume).fold<double>(0, max);
+    final maxVolume = entries
+        .map((e) => max(e.averageVolume, e.lastSessionVolume))
+        .fold<double>(0, max);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -951,28 +953,244 @@ class _TimeOfDayCard extends StatelessWidget {
           children: [
             Text('Volume by time of day', style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
-            ...entries.map((entry) {
-              final double ratio = maxVolume == 0 ? 0.0 : entry.volume / maxVolume;
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(entry.bucket.label),
-                        Text(_formatWeight(entry.volume), style: theme.textTheme.bodySmall),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    LinearProgressIndicator(value: ratio),
-                  ],
+            if (entries.isEmpty || maxVolume == 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  'No volume logged for these time slots yet.',
+                  style: theme.textTheme.bodyMedium,
                 ),
-              );
-            }),
+              )
+            else ...[
+              Builder(
+                builder: (context) {
+                  final scheme = Theme.of(context).colorScheme;
+                  final averageColor = scheme.primary;
+                  final lastColor = Color.lerp(scheme.primary, scheme.primaryContainer, 0.45)!;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _LegendItem(label: 'Average', swatchColor: averageColor),
+                          const SizedBox(width: 16),
+                          _LegendItem(label: 'Last session', swatchColor: lastColor),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _TimeOfDayBarChart(
+                        entries: entries,
+                        maxVolume: maxVolume,
+                        primaryColor: averageColor,
+                        secondaryColor: lastColor,
+                        textTheme: theme.textTheme,
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _TimeOfDayBarChart extends StatelessWidget {
+  const _TimeOfDayBarChart({
+    required this.entries,
+    required this.maxVolume,
+    required this.primaryColor,
+    required this.secondaryColor,
+    required this.textTheme,
+  });
+
+  final List<TimeOfDayVolume> entries;
+  final double maxVolume;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final TextTheme textTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    const double chartHeight = 140;
+    final ticks = _buildTicks(maxVolume);
+
+    return SizedBox(
+      height: chartHeight + 40,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _YAxis(ticks: ticks, chartHeight: chartHeight, textTheme: textTheme),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: entries
+                  .map(
+                    (entry) => Expanded(
+                      child: _TimeBucketBars(
+                        entry: entry,
+                        maxVolume: maxVolume,
+                        primaryColor: primaryColor,
+                        secondaryColor: secondaryColor,
+                        textTheme: textTheme,
+                        chartHeight: chartHeight,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<double> _buildTicks(double maxVolume) {
+    if (maxVolume <= 0) return const [0];
+    final mid = maxVolume / 2;
+    return [maxVolume, mid, 0];
+  }
+}
+
+class _TimeBucketBars extends StatelessWidget {
+  const _TimeBucketBars({
+    required this.entry,
+    required this.maxVolume,
+    required this.primaryColor,
+    required this.secondaryColor,
+    required this.textTheme,
+    required this.chartHeight,
+  });
+
+  final TimeOfDayVolume entry;
+  final double maxVolume;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final TextTheme textTheme;
+  final double chartHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final avgRatio = maxVolume == 0 ? 0.0 : entry.averageVolume / maxVolume;
+    final lastRatio = maxVolume == 0 ? 0.0 : entry.lastSessionVolume / maxVolume;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: SizedBox(
+              height: chartHeight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  _Bar(height: chartHeight * avgRatio, color: primaryColor),
+                  const SizedBox(width: 6),
+                  _Bar(height: chartHeight * lastRatio, color: secondaryColor),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(entry.bucket.label, style: textTheme.labelSmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _Bar extends StatelessWidget {
+  const _Bar({required this.height, required this.color});
+
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveHeight = height.isNaN || height.isNegative ? 0.0 : height;
+    return Container(
+      width: 14,
+      height: effectiveHeight,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            color.withOpacity(0.65),
+            color.withOpacity(0.25),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+        border: Border.all(color: color.withOpacity(0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.25),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  const _LegendItem({required this.label, required this.swatchColor});
+
+  final String label;
+  final Color swatchColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: swatchColor,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: swatchColor.withOpacity(0.25)),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _YAxis extends StatelessWidget {
+  const _YAxis({
+    required this.ticks,
+    required this.chartHeight,
+    required this.textTheme,
+  });
+
+  final List<double> ticks;
+  final double chartHeight;
+  final TextTheme textTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (ticks.isEmpty) return const SizedBox.shrink();
+    return SizedBox(
+      width: 48,
+      height: chartHeight,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: ticks.map((tick) {
+          final label = tick == 0 ? '0' : _formatWeight(tick);
+          return Text(label, style: textTheme.bodySmall);
+        }).toList(),
       ),
     );
   }
