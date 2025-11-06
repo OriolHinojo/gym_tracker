@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:gym_tracker/shared/set_tags.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -140,9 +141,12 @@ class LocalStore {
           if (!map.containsKey('tag')) {
             map['tag'] = null;
             setsUpdated = true;
-          } else if (map['tag'] != null && map['tag'] is! String) {
-            map['tag'] = map['tag'].toString();
-            setsUpdated = true;
+          } else {
+            final normalized = _normalizeTag(map['tag']);
+            if (normalized != map['tag']) {
+              map['tag'] = normalized;
+              setsUpdated = true;
+            }
           }
           sets.add(map);
         }
@@ -349,11 +353,8 @@ class LocalStore {
 
   String? _normalizeTag(dynamic value) {
     if (value == null) return null;
-    if (value is String) {
-      final trimmed = value.trim();
-      return trimmed.isEmpty ? null : trimmed;
-    }
-    return null;
+    final tag = setTagFromStorage(value is String ? value : value.toString());
+    return tag?.storage;
   }
 
   // ---------------------------------------------------------------------------
@@ -606,6 +607,24 @@ class LocalStore {
       return db.compareTo(da);
     });
     return workouts.take(limit).toList();
+  }
+
+  /// Returns all workouts (unsorted copy) for analytics usage.
+  Future<List<Map<String, dynamic>>> listWorkoutsRaw() async {
+    await init();
+    final workouts = List<Map<String, dynamic>>.from(_db['workouts'] ?? const []);
+    return workouts
+        .map((w) => Map<String, dynamic>.from(w))
+        .toList(growable: false);
+  }
+
+  /// Returns all sets (unsorted copy) for analytics usage.
+  Future<List<Map<String, dynamic>>> listAllSetsRaw() async {
+    await init();
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    return sets
+        .map((s) => Map<String, dynamic>.from(s))
+        .toList(growable: false);
   }
 
   /// Raw set rows for a specific workout (sorted by exercise + ordinal).

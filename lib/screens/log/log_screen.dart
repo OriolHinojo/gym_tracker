@@ -5,53 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/library/library_screen.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart';
+import 'package:gym_tracker/shared/set_tags.dart';
 import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 
-enum SetTag { warmUp, dropSet, amrap }
-
-extension SetTagX on SetTag {
-  String get storage {
-    switch (this) {
-      case SetTag.warmUp:
-        return 'warm_up';
-      case SetTag.dropSet:
-        return 'drop_set';
-      case SetTag.amrap:
-        return 'amrap';
-    }
-  }
-
-  String get label {
-    switch (this) {
-      case SetTag.warmUp:
-        return 'Warm-up';
-      case SetTag.dropSet:
-        return 'Drop set';
-      case SetTag.amrap:
-        return 'AMRAP';
-    }
-  }
-
-  static SetTag? fromStorage(String? value) {
-    switch (value) {
-      case 'warm_up':
-        return SetTag.warmUp;
-      case 'drop_set':
-        return SetTag.dropSet;
-      case 'amrap':
-        return SetTag.amrap;
-      default:
-        return null;
-    }
-  }
-}
-
-String? tagLabelFromStorage(String? storage) {
-  final tag = SetTagX.fromStorage(storage);
-  return tag?.label;
-}
-
-const List<SetTag> _setTagOptions = <SetTag>[SetTag.warmUp, SetTag.dropSet, SetTag.amrap];
+const List<SetTag> _setTagOptions = kAvailableSetTags;
 
 class LogScreen extends StatefulWidget {
   const LogScreen({super.key, this.templateId, this.workoutId, this.editWorkoutId});
@@ -477,7 +434,7 @@ class _LogScreenState extends State<LogScreen> {
               (entry) => _SetDraft(
                 weight: entry['weight'],
                 reps: entry['reps'],
-                tag: SetTagX.fromStorage(entry['tag']),
+                tag: setTagFromStorage(entry['tag']),
               ),
             )
             .toList();
@@ -603,7 +560,7 @@ class _LogScreenState extends State<LogScreen> {
         repsHint: entry.repsHint,
         done: !asPlaceholder,
         originalTimestamp: asPlaceholder ? null : createdAt,
-        tag: SetTagX.fromStorage(entry.tag),
+        tag: setTagFromStorage(entry.tag),
       ));
     }
 
@@ -1400,7 +1357,7 @@ class _ExerciseDraft {
         reps: exact.repsHint,
         weightHint: exact.weightHint,
         repsHint: exact.repsHint,
-        tag: SetTagX.fromStorage(exact.tag),
+        tag: setTagFromStorage(exact.tag),
       );
     }
 
@@ -1413,7 +1370,7 @@ class _ExerciseDraft {
       reps: fallback.repsHint,
       weightHint: fallback.weightHint,
       repsHint: fallback.repsHint,
-      tag: SetTagX.fromStorage(fallback.tag),
+      tag: setTagFromStorage(fallback.tag),
     );
   }
 }

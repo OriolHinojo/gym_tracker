@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
-
-const Map<String, String> _sessionTagLabels = <String, String>{
-  'warm_up': 'Warm-up',
-  'drop_set': 'Drop set',
-  'amrap': 'AMRAP',
-};
+import 'package:gym_tracker/shared/set_tags.dart';
 
 /// Renders a list of session exercises, each expandable to reveal sets.
 class SessionExercisesList extends StatelessWidget {
@@ -176,7 +171,7 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
                               for (var i = 0; i < sets.length; i++) ...[
                                 Builder(builder: (context) {
                                   final tag = sets[i].tag;
-                                  final tagLabel = tag == null ? null : _sessionTagLabels[tag];
+                                  final tagLabel = setTagLabelFromStorage(tag);
                                   final subtitleStyle = Theme.of(context)
                                       .textTheme
                                       .labelMedium
