@@ -137,6 +137,13 @@ class LocalStore {
           } else if (map['template_id'] is num) {
             map['template_id'] = (map['template_id'] as num).toInt();
           }
+          if (!map.containsKey('tag')) {
+            map['tag'] = null;
+            setsUpdated = true;
+          } else if (map['tag'] != null && map['tag'] is! String) {
+            map['tag'] = map['tag'].toString();
+            setsUpdated = true;
+          }
           sets.add(map);
         }
       }
@@ -231,6 +238,7 @@ class LocalStore {
         'weight': 120,
         'created_at': lastWeek.toIso8601String(),
         'template_id': null,
+        'tag': null,
       },
       {
         'id': 2,
@@ -242,6 +250,7 @@ class LocalStore {
         'weight': 160,
         'created_at': lastWeek.toIso8601String(),
         'template_id': null,
+        'tag': null,
       },
 
       // workout2 (this week)
@@ -255,6 +264,7 @@ class LocalStore {
         'weight': 90,
         'created_at': workout2Start.toIso8601String(),
         'template_id': null,
+        'tag': null,
       },
       {
         'id': 4,
@@ -266,6 +276,7 @@ class LocalStore {
         'weight': 100,
         'created_at': workout2Start.toIso8601String(),
         'template_id': null,
+        'tag': null,
       },
 
       // workout3 (this week)
@@ -279,6 +290,7 @@ class LocalStore {
         'weight': 130,
         'created_at': workout3Start.toIso8601String(),
         'template_id': null,
+        'tag': null,
       },
       {
         'id': 6,
@@ -290,6 +302,7 @@ class LocalStore {
         'weight': 105,
         'created_at': workout3Start.toIso8601String(),
         'template_id': null,
+        'tag': null,
       },
     ];
 
@@ -332,6 +345,15 @@ class LocalStore {
     if (table.isEmpty) return 1;
     final ids = table.map((e) => (e['id'] as num?)?.toInt() ?? 0).toList()..sort();
     return ids.last + 1;
+  }
+
+  String? _normalizeTag(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -684,6 +706,7 @@ class LocalStore {
       final weight = (s['weight'] as num?)?.toDouble();
       if (exerciseId == null || ordinal == null || reps == null || weight == null) continue;
       final createdAt = _resolveCreatedAt(s['created_at']);
+      final tag = _normalizeTag(s['tag']);
       allSets.add({
         'id': nextSetId++,
         'workout_id': workoutId,
@@ -694,6 +717,7 @@ class LocalStore {
         'weight': weight,
         'created_at': createdAt.toIso8601String(),
         'template_id': updatedTemplateId,
+        'tag': tag,
       });
     }
 
@@ -736,6 +760,7 @@ class LocalStore {
         : (allSets.map((e) => (e['id'] as num).toInt()).reduce((a, b) => a > b ? a : b) + 1);
 
     for (final s in sets) {
+      final tag = _normalizeTag(s['tag']);
       allSets.add({
         'id': nextSetId++,
         'workout_id': wid,
@@ -746,6 +771,7 @@ class LocalStore {
         'weight': (s['weight'] as num).toDouble(),
         'created_at': (s['created_at'] as DateTime? ?? now).toIso8601String(),
         'template_id': templateId,
+        'tag': tag,
       });
     }
 

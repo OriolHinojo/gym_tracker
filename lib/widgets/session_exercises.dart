@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 
+const Map<String, String> _sessionTagLabels = <String, String>{
+  'warm_up': 'Warm-up',
+  'drop_set': 'Drop set',
+  'amrap': 'AMRAP',
+};
+
 /// Renders a list of session exercises, each expandable to reveal sets.
 class SessionExercisesList extends StatelessWidget {
   const SessionExercisesList({
@@ -168,25 +174,36 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
                             children: [
                               const SizedBox(height: 12),
                               for (var i = 0; i < sets.length; i++) ...[
-                                ListTile(
-                                  dense: false,
-                                  contentPadding: EdgeInsets.zero,
-                                  leading: CircleAvatar(
-                                    radius: 18,
-                                    child: Text(
-                                      sets[i].ordinal.toString(),
-                                      style: ordinalStyle,
+                                Builder(builder: (context) {
+                                  final tag = sets[i].tag;
+                                  final tagLabel = tag == null ? null : _sessionTagLabels[tag];
+                                  final subtitleStyle = Theme.of(context)
+                                      .textTheme
+                                      .labelMedium
+                                      ?.copyWith(color: outline);
+                                  return ListTile(
+                                    dense: false,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: CircleAvatar(
+                                      radius: 18,
+                                      child: Text(
+                                        sets[i].ordinal.toString(),
+                                        style: ordinalStyle,
+                                      ),
                                     ),
-                                  ),
-                                  title: Text(
-                                    '${_formatWeight(sets[i].weight)} kg',
-                                    style: setValueStyle,
-                                  ),
-                                  trailing: Text(
-                                    '${sets[i].reps} reps',
-                                    style: setTrailingStyle,
-                                  ),
-                                ),
+                                    title: Text(
+                                      '${_formatWeight(sets[i].weight)} kg',
+                                      style: setValueStyle,
+                                    ),
+                                    subtitle: tagLabel == null
+                                        ? null
+                                        : Text(tagLabel, style: subtitleStyle),
+                                    trailing: Text(
+                                      '${sets[i].reps} reps',
+                                      style: setTrailingStyle,
+                                    ),
+                                  );
+                                }),
                                 if (i != sets.length - 1) const Divider(height: 1),
                               ],
                             ],

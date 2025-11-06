@@ -36,6 +36,7 @@ void main() {
             'reps': 5,
             'weight': 100,
             'created_at': now,
+            'tag': 'warm_up',
           },
         ],
       );
@@ -46,6 +47,7 @@ void main() {
       final sets = await LocalStore.instance.listSetsForWorkoutRaw(workoutId);
       expect(sets, isNotEmpty);
       expect(sets.first['template_id'], 42);
+      expect(sets.first['tag'], 'warm_up');
     });
 
     test('listLatestSetsForExerciseRaw prefers template-specific history', () async {

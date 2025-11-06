@@ -31,11 +31,13 @@ class SessionSet {
     required this.ordinal,
     required this.reps,
     required this.weight,
+    this.tag,
   });
 
   final int ordinal;
   final int reps;
   final double weight;
+  final String? tag;
 }
 
 /// Loads a full [SessionDetail] from the local store for the given workout id.
@@ -67,7 +69,13 @@ Future<SessionDetail> loadSessionDetail(int workoutId, {LocalStore? store}) asyn
       final ordinal = (row['ordinal'] as num?)?.toInt() ?? 0;
       final reps = (row['reps'] as num?)?.toInt() ?? 0;
       final weight = (row['weight'] as num?)?.toDouble() ?? 0;
-      return SessionSet(ordinal: ordinal, reps: reps, weight: weight);
+      final tag = row['tag'];
+      return SessionSet(
+        ordinal: ordinal,
+        reps: reps,
+        weight: weight,
+        tag: tag == null ? null : tag.toString(),
+      );
     }).toList()
       ..sort((a, b) => a.ordinal.compareTo(b.ordinal));
     return SessionExercise(name: exName, sets: setVms);
