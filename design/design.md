@@ -40,9 +40,9 @@
   - `createExercise(...)` — invoked from the shared dialog.
   - `listWorkoutTemplatesRaw() / getWorkoutTemplateRaw(id)` and `create/deleteWorkoutTemplate(...)`.
   - `listRecentWorkoutsRaw(limit)`, `listSetsForWorkoutRaw(workoutId)` — drive “repeat workout”.
-  - `listSetsForExerciseRaw(exerciseId)` and `listLatestSetsForExerciseRaw(exerciseId)` — history + placeholder data.
-  - `saveWorkout(...)` — persists finished sessions and appends individual sets.
-  - `getHomeStats()` — computes weekly session count, e1RM delta for the favourite exercise, and last-session exercises. Uses the internal `_seedMockData()` and e1RM (Epley) formula.
+  - `listSetsForExerciseRaw(exerciseId)` and `listLatestSetsForExerciseRaw(exerciseId, templateId?)` — history + template-aware placeholders.
+  - `saveWorkout(...)` — persists finished sessions and appends individual sets (including template lineage + per-set tags).
+- `getHomeStats()` — computes weekly session count, e1RM delta for the favourite exercise, and last-session exercises. Uses the internal `_seedMockData()` and e1RM (Epley) formula.
 - Emits `preferredExerciseIdListenable` (`ValueNotifier<int?>`) so the Home dashboard reacts to favourites.
 - Not available on Web (`assert(!kIsWeb)`); all screens rely on this guard.
 
@@ -83,19 +83,21 @@
 - Per exercise block:
   - Displays name + category.
   - History button opens the detailed analytics screen (`ExerciseDetailScreen`).
-  - Edit toggle expands to show set table with:
-    - Weight + reps text fields (prefilled from latest history when available).
-    - Completion checkbox (visual only; save respects numeric inputs).
-    - Delete set button.
-  - “Add set” uses history hints to prefill values.
+  - Edit toggle expands to show interactive set rows with:
+    - Weight + reps text fields (prefilled from template-aware history when available), auto-focused to the first empty field.
+    - Inline tag picker (warm-up / drop set / AMRAP) rendered as a compact icon badge with tooltip.
+    - Completion checkbox (visual only; saves rely on numeric inputs) and delete action.
+    - Per-exercise rest timer controls (start/stop, target presets, elapsed/last rest summaries).
+  - “Add set” uses history hints to prefill values; “Same as last” duplicates the latest row, including tag selection.
 - “Add exercise” bottom sheet:
   - Searchable list of all exercises from `LocalStore`.
-  - “Create new exercise” uses the shared dialog and automatically inserts the new entry.
-- The dedicated workout detail screen now reuses the shared session header + exercise list widgets, ensuring the collapsible set cards behave the same way as in previews (tap to expand sets, weight/reps hidden by default).
+  - “Create new exercise” uses the shared dialog and automatically inserts the new entry, dropping straight into edit mode.
+- The dedicated workout detail screen now reuses the shared session header + exercise list widgets, ensuring the collapsible set cards behave the same way as in previews (tap to expand sets, weight/reps hidden by default, tags surfaced).
 
 ### Actions
 - **Save as template**: collects current exercise ids and persists a workout template via `LocalStore.createWorkoutTemplate`.
 - **Finish**: validates numeric sets, writes them with `saveWorkout`, then resets screen state and restarts the timer.
+- **Discard**: trash icon in the app bar prompts to abandon the in-progress workout (without persisting anything) and resets the editor.
 - Snackbars confirm success/failure for all major flows.
 
 ---
@@ -112,7 +114,7 @@
 ### Workouts tab
 - Lists persisted templates; supports preview, delete, and “Run in Log”.
 - “New Workout Template” dialog allows picking exercises via checkboxes and persists to `LocalStore`.
-- Template preview bottom sheet now goes through the shared session preview UI. It fabricates a lightweight `SessionDetail` (id `0`) that pulls the most recent recorded sets per exercise, so users see real weights/reps alongside a note clarifying the data source.
+- Template preview bottom sheet now goes through the shared session preview UI. It fabricates a lightweight `SessionDetail` (id `0`) that pulls the most recent recorded sets per exercise (template-specific when possible), so users see real weights/reps alongside a note clarifying the data source and tag chips.
 
 ### Exercise detail (`ExerciseDetailScreen`)
 - Loads exercise info, raw sets, and preferred exercise status.
@@ -138,7 +140,7 @@
 ## 9) 🧩 Shared Widgets & Utilities
 
 - `SessionDetail` (`lib/shared/session_detail.dart`): single source of truth for loading workouts, grouping sets per exercise, and resolving exercise names.
-- `SessionPreviewSheet`, `SessionHeaderCard`, `SessionExercisesList`: reusable session UI primitives. The header card sits on the brand `primaryContainer`, adds template/session chips (exercise count, total sets), and surfaces notes inline. Exercise cards start collapsed, show summary stats (set count, total reps, top set), and expand on tap to reveal set lists with enlarged weight/rep text for readability.
+- `SessionPreviewSheet`, `SessionHeaderCard`, `SessionExercisesList`: reusable session UI primitives. The header card sits on the brand `primaryContainer`, adds template/session chips (exercise count, total sets), and surfaces notes inline. Exercise cards start collapsed, show summary stats (set count, total reps, top set), and expand on tap to reveal set lists with enlarged weight/rep text for readability plus tag badges beneath each set row.
 - `ProgressFilters`: wrap of choice chips with optional `leading` widgets for extra controls.
 - `ProgressLineChart`: lightweight `CustomPainter` line chart (no external chart dependency used despite `fl_chart` being listed).
 - `ProgressPointsRecap`: simple card listing all generated `ProgressPoint`s.
@@ -161,7 +163,10 @@
 ## 11) 🧪 Testing & Tooling
 
 - Lints: `very_good_analysis` + Flutter lints (configured in `analysis_options.yaml`).
-- Tests: single smoke test (`test/widget_test.dart`) verifying that `IronPulseApp` builds; no integration or unit coverage yet.
+- Tests:
+  - `test/widget_test.dart` smoke test (`IronPulseApp` build).
+  - `test/local_store_template_test.dart` verifies template lineage + per-set tag persistence.
+  - `test/log_screen_focus_test.dart` covers log editor focus behaviour and “Same as last” duplication.
 - Dependencies declared in `pubspec.yaml`; unused packages (`fl_chart`, `freezed`, etc.) are ready for future work but not referenced in current code.
 
 ---
