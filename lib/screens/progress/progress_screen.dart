@@ -380,6 +380,8 @@ class _TemplatesTabState extends State<_TemplatesTab> {
               const SizedBox(height: 12),
             ],
             if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
+              _SectionHeader(title: 'Volume insights'),
+              const SizedBox(height: 8),
               _TimeOfDayCard(entries: vm.analytics.volumeByTimeOfDay),
               const SizedBox(height: 12),
             ],
@@ -769,6 +771,20 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               lastSessionWeight: vm.lastSessionWeight,
             ),
             const SizedBox(height: 12),
+            _ChartCard(
+              title: 'Weight Trend — ${vm.selectedExerciseName}',
+              subtitle:
+                  vm.mode == ProgressAggMode.avgPerSession ? 'Average weight per session' : 'Set order: ${vm.mode.label}',
+              points: vm.series,
+            ),
+            const SizedBox(height: 16),
+            ProgressFilters(
+              mode: vm.mode,
+              range: vm.range,
+              onModeChanged: (mode) => _reload(mode: mode),
+              onRangeChanged: (range) => _reload(range: range),
+            ),
+            const SizedBox(height: 16),
             if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
               _TimeOfDayCard(entries: vm.analytics.volumeByTimeOfDay),
               const SizedBox(height: 12),
@@ -777,22 +793,6 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               _PrCard(records: vm.analytics.personalRecords),
               const SizedBox(height: 12),
             ],
-            _SectionHeader(title: 'Weight trend'),
-            const SizedBox(height: 8),
-            ProgressFilters(
-              mode: vm.mode,
-              range: vm.range,
-              onModeChanged: (mode) => _reload(mode: mode),
-              onRangeChanged: (range) => _reload(range: range),
-            ),
-            const SizedBox(height: 12),
-            _ChartCard(
-              title: 'Weight Trend — ${vm.selectedExerciseName}',
-              subtitle:
-                  vm.mode == ProgressAggMode.avgPerSession ? 'Average weight per session' : 'Set order: ${vm.mode.label}',
-              points: vm.series,
-            ),
-            const SizedBox(height: 16),
             ProgressPointsRecap(points: vm.series),
           ],
         );
