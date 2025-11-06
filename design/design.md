@@ -129,10 +129,13 @@
 - `ProgressCalculator.buildSeries(...)` transforms raw set rows into `ProgressPoint` data:
   - Filters invalid entries, groups by workout, averages or selects set ordinal.
   - Applies date window filtering.
-- `ProgressScreen` (`lib/screens/progress/progress_screen.dart`) lets users:
-  - Pick an exercise (dropdown).
-  - Toggle aggregation mode + range via `ProgressFilters`.
-  - View custom line chart (`ProgressLineChart`) and exact point list (`ProgressPointsRecap`).
+- `AnalyticsService` (`lib/services/analytics/analytics_service.dart`) aggregates template-aware metrics:
+  - Session/volume totals, time-of-day splits, and personal records.
+  - Supports filters for templates, set tags, and time-of-day buckets.
+- `ProgressScreen` (`lib/screens/progress/progress_screen.dart`) surfaces:
+  - Summary, volume trend, time-of-day, and PR insight cards with filter controls.
+  - Template selector + modal for tag/time filters.
+  - Exercise-specific weight trend chart (`ProgressLineChart`) and detailed point recap.
 - Exercise detail screen reuses the same calculator and UI components, keeping analytics consistent.
 
 ---
@@ -141,6 +144,7 @@
 
 - `SessionDetail` (`lib/shared/session_detail.dart`): single source of truth for loading workouts, grouping sets per exercise, and resolving exercise names.
 - `SessionPreviewSheet`, `SessionHeaderCard`, `SessionExercisesList`: reusable session UI primitives. The header card sits on the brand `primaryContainer`, adds template/session chips (exercise count, total sets), and surfaces notes inline. Exercise cards start collapsed, show summary stats (set count, total reps, top set), and expand on tap to reveal set lists with enlarged weight/rep text for readability plus tag badges beneath each set row.
+- `set_tags.dart`: shared enum + helpers for set tagging across log, analytics, and previews.
 - `ProgressFilters`: wrap of choice chips with optional `leading` widgets for extra controls.
 - `ProgressLineChart`: lightweight `CustomPainter` line chart (no external chart dependency used despite `fl_chart` being listed).
 - `ProgressPointsRecap`: simple card listing all generated `ProgressPoint`s.
@@ -167,6 +171,7 @@
   - `test/widget_test.dart` smoke test (`IronPulseApp` build).
   - `test/local_store_template_test.dart` verifies template lineage + per-set tag persistence.
   - `test/log_screen_focus_test.dart` covers log editor focus behaviour and “Same as last” duplication.
+  - `test/analytics_service_test.dart` validates analytics snapshot filters (template, tag, time-of-day). Requires fixing the `/usr/bin/env bash` newline issue before running via CLI.
 - Dependencies declared in `pubspec.yaml`; unused packages (`fl_chart`, `freezed`, etc.) are ready for future work but not referenced in current code.
 
 ---
@@ -174,7 +179,10 @@
 ## 12) 🚧 Known Gaps & Next Steps
 
 - Logging UX lacks advanced set types (drop sets, RPE/RIR input, timers per exercise) described in earlier concepts.
-- Progress analytics operate on basic averages; no e1RM curve, rep filtering, or template comparisons yet.
+- Progress analytics still missing richer metadata and visuals:
+  - Capture session duration, perceived exertion, location, and actual rest metrics.
+  - Add drill-down screens and advanced visuals (calendar heatmap, scatter plots, per-template comparisons).
+  - Allow saving analytics “views” and caching aggregates to improve performance on large histories.
 - Import/export, PR tracking, and body metrics tables are seeded but unused.
 - No persistence of workout metadata beyond name (always saved as “Workout”) or session duration.
 - Test coverage is minimal; consider adding unit tests for `LocalStore` and `ProgressCalculator`.
