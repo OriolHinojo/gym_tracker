@@ -827,91 +827,128 @@ class _LogScreenState extends State<LogScreen> {
                           final s = entry.value;
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Column(
+                            child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    SizedBox(width: 32, child: Center(child: Text('$displayIndex'))),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: s.weight,
-                                        focusNode: s.weightFocus,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(decimal: true),
-                                        textInputAction: TextInputAction.next,
-                                        onSubmitted: (_) => _focusRepsField(ex, s),
-                                        decoration: InputDecoration(
-                                          labelText: 'Weight',
-                                          hintText: s.weightHint,
-                                          floatingLabelBehavior: FloatingLabelBehavior.always,
-                                        ),
+                              children: <Widget>[
+                                SizedBox(width: 32, child: Center(child: Text('$displayIndex'))),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: s.weight,
+                                    focusNode: s.weightFocus,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(decimal: true),
+                                    textInputAction: TextInputAction.next,
+                                    onSubmitted: (_) => _focusRepsField(ex, s),
+                                    decoration: InputDecoration(
+                                      labelText: 'Weight',
+                                      hintText: s.weightHint,
+                                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: TextField(
+                                    controller: s.reps,
+                                    focusNode: s.repsFocus,
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.next,
+                                    onSubmitted: (_) => _focusNextWeightField(ex, s),
+                                    decoration: InputDecoration(
+                                      labelText: 'Reps',
+                                      hintText: s.repsHint,
+                                      floatingLabelBehavior: FloatingLabelBehavior.always,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                PopupMenuButton<SetTag?>(
+                                  tooltip: 'Tag set',
+                                  onSelected: (value) => setState(() => s.tag = value),
+                                  itemBuilder: (context) => [
+                                    PopupMenuItem<SetTag?>(
+                                      value: null,
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            s.tag == null ? Icons.check : Icons.circle,
+                                            size: 16,
+                                            color: s.tag == null
+                                                ? colorScheme.primary
+                                                : outline.withOpacity(0.4),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Text('No tag'),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: s.reps,
-                                        focusNode: s.repsFocus,
-                                        keyboardType: TextInputType.number,
-                                        textInputAction: TextInputAction.next,
-                                        onSubmitted: (_) => _focusNextWeightField(ex, s),
-                                        decoration: InputDecoration(
-                                          labelText: 'Reps',
-                                          hintText: s.repsHint,
-                                          floatingLabelBehavior: FloatingLabelBehavior.always,
+                                    ..._setTagOptions.map(
+                                      (tag) => PopupMenuItem<SetTag?>(
+                                        value: tag,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              s.tag == tag ? Icons.check : Icons.circle,
+                                              size: 16,
+                                              color: s.tag == tag
+                                                  ? colorScheme.primary
+                                                  : outline.withOpacity(0.4),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(tag.label),
+                                          ],
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Checkbox(
-                                      value: s.done,
-                                      onChanged: (v) => setState(() => s.done = v ?? false),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Delete set',
-                                      onPressed: () => _removeSet(ex, s),
-                                      icon: const Icon(Icons.close),
                                     ),
                                   ],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    const SizedBox(width: 32),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: DropdownButtonHideUnderline(
-                                        child: InputDecorator(
-                                          decoration: const InputDecoration(
-                                            labelText: 'Tag',
-                                            border: OutlineInputBorder(),
+                                  child: Tooltip(
+                                    message: s.tag?.label ?? 'No tag',
+                                    child: Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: outline.withOpacity(0.6)),
+                                        color: s.tag == null
+                                            ? Colors.transparent
+                                            : outline.withOpacity(0.12),
+                                      ),
+                                      child: Stack(
+                                        alignment: Alignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.local_offer_outlined,
+                                            size: 18,
+                                            color: outline,
                                           ),
-                                          child: DropdownButton<SetTag?>(
-                                            value: s.tag,
-                                            isExpanded: true,
-                                            onChanged: (value) {
-                                              setState(() => s.tag = value);
-                                            },
-                                            items: [
-                                              const DropdownMenuItem<SetTag?>(
-                                                value: null,
-                                                child: Text('No tag'),
-                                              ),
-                                              ..._setTagOptions.map(
-                                                (tag) => DropdownMenuItem<SetTag?>(
-                                                  value: tag,
-                                                  child: Text(tag.label),
+                                          if (s.tag != null)
+                                            Positioned(
+                                              right: 6,
+                                              top: 6,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme.primary,
+                                                  shape: BoxShape.circle,
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                        ),
+                                            ),
+                                        ],
                                       ),
                                     ),
-                                  ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Checkbox(
+                                  value: s.done,
+                                  onChanged: (v) => setState(() => s.done = v ?? false),
+                                ),
+                                IconButton(
+                                  tooltip: 'Delete set',
+                                  onPressed: () => _removeSet(ex, s),
+                                  icon: const Icon(Icons.close),
                                 ),
                               ],
                             ),
