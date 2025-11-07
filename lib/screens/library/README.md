@@ -18,8 +18,8 @@ Exercise and workout template hub with search/filter, CRUD dialogs, and session 
 
 **Public API (surface area)**
 - Exposed widgets/classes: `LibraryScreen`.
-- Navigation: `context.pushNamed('exerciseDetail', pathParameters: {'id': ...})`; templates tab uses `context.pushNamed('log', extra: {'templateId': id})`; preview sheet loads either the latest logged session (when available) or a template summary via `showSessionPreviewSheet`.
-- Events/commands: FAB opens `showCreateExerciseDialog` or template dialog; long-press shows edit/delete bottom sheet; template dialog persists selections; preview action button routes to `/log` with `editWorkoutId` when a real session exists.
+- Navigation: `context.pushNamed('exerciseDetail', pathParameters: {'id': ...})`; templates tab uses `context.pushNamed('log', extra: {'templateId': id})`; preview sheet renders a template summary and decorates it with latest-session metadata when available, and launches `showWorkoutEditorPage(context, editWorkoutId: id)` for inline edits.
+- Events/commands: FAB opens `showCreateExerciseDialog` or template dialog; long-press shows edit/delete bottom sheet; template dialog persists selections; preview action button opens the shared editor via `showWorkoutEditorPage` when a real session exists.
 
 **Data & Services**
 - Models/DTOs: Works with raw `LocalStore` maps; uses `ProgressCalculator` and `ProgressPoint` for charts in previews.
@@ -36,7 +36,8 @@ Exercise and workout template hub with search/filter, CRUD dialogs, and session 
 - How to run: `flutter test` (full suite) after overriding `LocalStore` directory.
 - Notable test helpers/mocks: Use `LocalStore.overrideAppDirectory` before launching screen in widget tests.
 
-- **Template previews:** If no logged session matches a template, the preview falls back to synthetic data and omits the edit button; this keeps the shared widget consistent with Home calendar behaviour.
+**Gotchas & Conventions**
+- **Template previews:** Preview content now always mirrors the template ordering; when a logged session exists, metadata (notes/start time) and the edit button remain available, otherwise the sheet shows synthetic placeholder guidance. The edit CTA hands off to `showWorkoutEditorPage`, so keep navigation callbacks aligned with `WorkoutEditorResult`.
 - Exercise long-press bottom sheet exposes destructive delete—ensure confirmation dialog remains in sync with `LocalStore` cleanup.
 - Template preview combos volumes/tags via shared widgets; ensure analytics filters align with `ProgressScreen`.
 - Refresh tokens increment to reload template list—keep when adding new state.

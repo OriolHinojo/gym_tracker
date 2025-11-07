@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart' as exercise_icons;
 import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
+import 'package:gym_tracker/widgets/workout_editor.dart' show showWorkoutEditorPage;
 import 'package:gym_tracker/widgets/session_preview_sheet.dart';
 
 /// Simple summary of sessions grouped by day for the home calendar.
@@ -285,7 +285,10 @@ class _HomeCalendarSheetState extends State<_HomeCalendarSheet> {
                                     onPressed: (sheetContext, detail) {
                                       Navigator.of(sheetContext).pop();
                                       if (!rootContext.mounted) return;
-                                      rootContext.go('/log', extra: {'editWorkoutId': detail.id});
+                                      showWorkoutEditorPage(
+                                        rootContext,
+                                        editWorkoutId: detail.id,
+                                      );
                                     },
                                   ),
                                 );

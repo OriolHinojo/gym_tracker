@@ -11,6 +11,7 @@ import 'package:gym_tracker/widgets/progress_filters.dart';
 import 'package:gym_tracker/widgets/progress_line_chart.dart';
 import 'package:gym_tracker/widgets/progress_points_recap.dart';
 import 'package:gym_tracker/widgets/session_preview_sheet.dart';
+import 'package:gym_tracker/widgets/workout_editor.dart' show showWorkoutEditorPage;
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -433,35 +434,34 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
     if (!mounted) return;
 
     SessionPreviewAction? action;
-    Future<SessionDetail> future;
-    String? subtitle = 'Template preview';
-
-    if (latestWorkout != null) {
-      final workoutId = (latestWorkout['id'] as num?)?.toInt();
-      if (workoutId != null) {
-        future = loadSessionDetail(workoutId);
-        subtitle = null;
+    final workoutId = (latestWorkout?['id'] as num?)?.toInt();
+    if (workoutId != null) {
         action = SessionPreviewAction(
           label: 'Edit',
           onPressed: (sheetContext, detail) {
             Navigator.of(sheetContext).pop();
             if (!context.mounted) return;
-            context.go('/log', extra: {'editWorkoutId': detail.id});
+            showWorkoutEditorPage(
+              context,
+              editWorkoutId: detail.id,
+            );
           },
           isVisible: (detail) => detail.id > 0,
         );
-      } else {
-        future = _buildTemplatePreview(templateId, exerciseIds, resolvedName);
-      }
-    } else {
-      future = _buildTemplatePreview(templateId, exerciseIds, resolvedName);
     }
+
+    final future = _buildTemplatePreview(
+      templateId,
+      exerciseIds,
+      resolvedName,
+      lastWorkout: latestWorkout,
+    );
 
     showSessionPreviewSheet(
       context,
       sessionFuture: future,
       title: resolvedName,
-      subtitle: subtitle,
+      subtitle: 'Template preview',
       primaryAction: action,
     );
   }
@@ -470,6 +470,7 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
     int templateId,
     List<int> exerciseIds,
     String resolvedName,
+    {Map<String, dynamic>? lastWorkout}
   ) async {
     final all = await LocalStore.instance.listExercisesRaw();
     final byId = <int, Map<String, dynamic>>{
@@ -489,6 +490,9 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
               ordinal: (row['ordinal'] as num?)?.toInt() ?? 0,
               reps: (row['reps'] as num?)?.toInt() ?? 0,
               weight: (row['weight'] as num?)?.toDouble() ?? 0,
+              tag: (row['tag'] ?? '') == ''
+                  ? null
+                  : row['tag'].toString(),
             ),
           )
           .toList();
@@ -497,11 +501,18 @@ class _WorkoutsTabState extends State<_WorkoutsTab> {
     final templateNotes = exercises.isEmpty
         ? 'Template contains no exercises yet.'
         : 'Shows the most recent logged sets for each exercise (per template when available).';
+    final workoutNotes = (lastWorkout?['notes'] ?? '').toString().trim();
+    final combinedNotes = [
+      if (workoutNotes.isNotEmpty) workoutNotes,
+      templateNotes,
+    ].join('\n\n').trim();
+    final startedAtRaw = (lastWorkout?['started_at'] ?? '').toString();
+    final startedAt = DateTime.tryParse(startedAtRaw);
     return SessionDetail(
-      id: 0,
+      id: (lastWorkout?['id'] as num?)?.toInt() ?? 0,
       name: resolvedName,
-      startedAt: null,
-      notes: templateNotes,
+      startedAt: startedAt,
+      notes: combinedNotes.isEmpty ? templateNotes : combinedNotes,
       exercises: exercises,
     );
   }

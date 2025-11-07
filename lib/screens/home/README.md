@@ -20,7 +20,7 @@ Landing dashboard summarising weekly activity, recent sessions, and highlights w
 **Public API (surface area)**
 - Exposed widgets/classes: `HomeScreen`.
 - Navigation: FAB uses `context.go('/log')`; list tiles `context.push('/sessions/<id>')`; stat cards link to `/progress` or `/`.
-- Events/commands: Recent session tap opens the detail screen; calendar day taps open the preview sheet with the reusable edit action; highlight actions placeholder (`See all` button).
+- Events/commands: Recent session tap opens the detail screen; calendar day taps open the preview sheet with the reusable edit action (launches `showWorkoutEditorPage` for inline editing); highlight actions placeholder (`See all` button).
 
 **Data & Services**
 - Models/DTOs: `HomeStats` (defined in `LocalStore`), `SessionDetail`.
@@ -39,7 +39,7 @@ Landing dashboard summarising weekly activity, recent sessions, and highlights w
 
 **Gotchas & Conventions**
 - Ensure `LocalStore.init()` completes before navigating to Home; otherwise FutureBuilders show loaders.
-- Calendar preview delegates to `showSessionPreviewSheet` with `SessionPreviewAction`; updates here also affect Library previews.
+- Calendar preview delegates to `showSessionPreviewSheet` with `SessionPreviewAction`; updates here also affect Library previews. The edit CTA triggers `showWorkoutEditorPage`, so navigation changes must stay in sync with the shared editor callbacks.
 - `_SummaryGrid` adapts layout using width breakpoints; keep consistent when adding cards.
 - Highlights list currently static; update copy or drive from analytics when available.
 

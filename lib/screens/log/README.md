@@ -4,13 +4,14 @@
 Workout logging and editing flow with stopwatch, template replay, set management, and deep-link support for existing sessions.
 
 **Contents & Key Files**
-- [log_screen.dart](log_screen.dart): Main editor handling templates, stopwatch ticker, set inputs, and persistence.
+- [log_screen.dart](log_screen.dart): Wraps the shared `WorkoutEditor` widget and exposes helpers for launching it as a page.
 - [workout_detail_screen.dart](workout_detail_screen.dart): Read-only session detail view with delete/edit actions.
+- [`WorkoutEditor`](../widgets/workout_editor.dart): Stateful editor component with stopwatch ticker, template replay, and persistence hooks.
 
 **How It Fits In**
-- Entry point(s): GoRouter branch `/log` (`log` route) and deep links `/workout/:id` (extra `workoutId`) or `/log` extras (`templateId`, `editWorkoutId`); detail screen at `/sessions/:id`.
+- Entry point(s): GoRouter branch `/log` (`log` route) and deep links `/workout/:id` (extra `workoutId`) or `/log` extras (`templateId`, `editWorkoutId`); `showWorkoutEditorPage` can launch the same editor from any context; detail screen at `/sessions/:id`.
 - Upstream deps: `LocalStore` for CRUD, `SessionDetail` loader, shared widgets (`SessionDetailBody`, `SessionPrimaryActionButton`, `SessionPreviewSheet`), `SetTag` helpers, `Ticker` from `flutter/scheduler`.
-- Downstream consumers: Navigates back to home/progress via `context.go`; editing route returns to `/log` with populated drafts.
+- Downstream consumers: Navigates back to home/progress via `context.go`; editor callbacks (`WorkoutEditorResult`) let hosts decide whether to pop, show session detail, or return to `/log`.
 
 **State & Architecture**
 - Pattern: Stateful widget with manual lists of `_ExerciseDraft`/`_SetDraft`, plus a `Ticker`-driven stopwatch.
@@ -18,8 +19,8 @@ Workout logging and editing flow with stopwatch, template replay, set management
 - Data flow: Route extras/template selection → `LocalStore` queries (`getWorkoutTemplateRaw`, `listLatestSetsForExerciseRaw`, `getWorkoutRaw`) → draft builder → user edits sets → `saveWorkout`/`update` operations (not shown but implemented within file) → optional navigation to session detail.
 
 **Public API (surface area)**
-- Exposed widgets/classes: `LogScreen`, `WorkoutDetailScreen`.
-- Navigation: `context.go('/log', extra: {...})` to open editor with template or existing workout; detail FAB navigates to `/log` for editing; `context.push('/sessions/$id')` to view history without losing back navigation.
+- Exposed widgets/classes: `LogScreen`, `WorkoutEditor`, `WorkoutEditorResult`, `WorkoutDetailScreen`.
+- Navigation: `context.go('/log', extra: {...})` still opens the editor within the log route; `showWorkoutEditorPage(context, editWorkoutId: id)` launches the same experience from modals or other screens; callbacks receive `WorkoutEditorResult` to push session detail (`/sessions/$id`) or simply pop.
 - Events/commands: Stopwatch controls (`_ticker.start/pause`), set operations (`_addBlankSet`, `_duplicateLastSet`, `_removeSet`), discard dialog, delete workout confirm in detail view.
 
 **Data & Services**
@@ -44,8 +45,11 @@ Workout logging and editing flow with stopwatch, template replay, set management
 - Route extras are untyped; perform null/type checks before use.
 
 **Quick Start**
-- For dev work here: push extras via `context.go('/log', extra: {'templateId': 1})` to preview template replay.
+- For dev work here: push extras via `context.go('/log', extra: {'templateId': 1})` to preview template replay, or `await showWorkoutEditorPage(context, editWorkoutId: 12)` to reuse the editor inline.
 - Example usage:
 ```dart
-context.go('/log', extra: {'editWorkoutId': workoutId});
+await showWorkoutEditorPage(
+  context,
+  editWorkoutId: workoutId,
+);
 ```

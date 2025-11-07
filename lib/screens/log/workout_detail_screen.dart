@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
+import 'package:gym_tracker/widgets/workout_editor.dart' show showWorkoutEditorPage;
 import 'package:gym_tracker/widgets/session_detail_body.dart';
 import 'package:gym_tracker/widgets/session_primary_action_button.dart';
 
@@ -91,7 +92,10 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           if (vm == null) return const SizedBox.shrink();
           return SessionPrimaryActionButton(
             label: 'Edit',
-            onPressed: () => context.go('/log', extra: {'editWorkoutId': vm.id}),
+            onPressed: () => showWorkoutEditorPage(
+              context,
+              editWorkoutId: vm.id,
+            ),
           );
         },
       ),
