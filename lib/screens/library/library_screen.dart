@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
@@ -181,18 +182,155 @@ class _ExercisesTab extends StatefulWidget {
 }
 
 class _ExercisesTabState extends State<_ExercisesTab> {
+  String? _selectedCategory;
+  List<String> _availableCategories = const [];
+
+  String _normalizeCategoryValue(String? raw) {
+    final normalized = (raw ?? '').toString().trim().toLowerCase();
+    if (normalized.isEmpty) return 'unknown';
+    return normalized;
+  }
+
+  String _categoryLabel(String value) {
+    if (value.isEmpty || value == 'unknown') return 'Unknown';
+    return value
+        .split(RegExp(r'[\s_]+'))
+        .where((part) => part.isNotEmpty)
+        .map(
+          (part) => part.substring(0, 1).toUpperCase() +
+              (part.length > 1 ? part.substring(1) : ''),
+        )
+        .join(' ');
+  }
+
+  Future<void> _openCategoryFilterSheet() async {
+    final categories = _availableCategories;
+    if (categories.isEmpty) return;
+
+    String? tempSelection = _selectedCategory;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => DraggableScrollableSheet(
+        expand: false,
+        builder: (context, controller) => StatefulBuilder(
+          builder: (context, setModalState) => SingleChildScrollView(
+            controller: controller,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Exercise category',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(sheetContext),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilterChip(
+                      label: const Text('All categories'),
+                      selected: tempSelection == null,
+                      onSelected: (selected) {
+                        if (!selected) return;
+                        setModalState(() => tempSelection = null);
+                      },
+                    ),
+                    ...categories.map(
+                      (category) => FilterChip(
+                        label: Text(_categoryLabel(category)),
+                        selected: tempSelection == category,
+                        onSelected: (selected) => setModalState(() {
+                          tempSelection = selected ? category : null;
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setModalState(() => tempSelection = null);
+                      },
+                      child: const Text('Clear'),
+                    ),
+                    const Spacer(),
+                    FilledButton(
+                      onPressed: () {
+                        Navigator.pop(sheetContext);
+                        if (!mounted) return;
+                        if (_selectedCategory != tempSelection) {
+                          setState(() => _selectedCategory = tempSelection);
+                        }
+                      },
+                      child: const Text('Apply'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasCategorySelection = _selectedCategory != null;
+    final filterIconColor = hasCategorySelection ? theme.colorScheme.primary : null;
+
     return Column(
       children: <Widget>[
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: TextField(
-            decoration:
-                const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search exercises'),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: 'Search exercises',
+              suffixIcon: IconButton(
+                tooltip: 'Filter by category',
+                icon: Icon(
+                  hasCategorySelection ? Icons.filter_alt : Icons.filter_alt_outlined,
+                  color: filterIconColor,
+                ),
+                onPressed: _availableCategories.isEmpty
+                    ? null
+                    : () {
+                        _openCategoryFilterSheet();
+                      },
+              ),
+            ),
             onChanged: (v) => widget.onQuery(v.trim()),
           ),
         ),
+        if (hasCategorySelection)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: InputChip(
+                avatar: const Icon(Icons.filter_alt, size: 16),
+                label: Text('Category: ${_categoryLabel(_selectedCategory!)}'),
+                onDeleted: () => setState(() => _selectedCategory = null),
+              ),
+            ),
+          ),
+        if (hasCategorySelection) const SizedBox(height: 4),
         Flexible(
           fit: FlexFit.tight,
           child: FutureBuilder<List<Map<String, dynamic>>>(
@@ -206,15 +344,44 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               }
               final exercises = snapshot.data ?? [];
               final q = widget.query.toLowerCase();
-              final filtered = q.isEmpty
-                  ? exercises
-                  : exercises.where((e) {
-                      final name = (e['name'] ?? '').toString().toLowerCase();
-                      final cat = (e['category'] ?? 'Unknown').toString().toLowerCase();
-                      return name.contains(q) || cat.contains(q);
-                    }).toList();
+              final categories = <String>{
+                for (final e in exercises) _normalizeCategoryValue(e['category']),
+              };
+              final sortedCategories = categories.toList()
+                ..sort((a, b) => _categoryLabel(a).compareTo(_categoryLabel(b)));
+              if (!listEquals(_availableCategories, sortedCategories)) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  if (!listEquals(_availableCategories, sortedCategories)) {
+                    setState(() => _availableCategories = sortedCategories);
+                  }
+                });
+              }
+              final selectedCategory = _selectedCategory;
+              if (selectedCategory != null && !categories.contains(selectedCategory)) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  if (_selectedCategory == selectedCategory) {
+                    setState(() => _selectedCategory = null);
+                  }
+                });
+              }
+              final filtered = exercises.where((e) {
+                final name = (e['name'] ?? '').toString().toLowerCase();
+                final rawCategoryValue = (e['category'] ?? '').toString();
+                final effectiveCategory =
+                    rawCategoryValue.trim().isEmpty ? 'Unknown' : rawCategoryValue;
+                final normalizedCategory = _normalizeCategoryValue(rawCategoryValue);
+                final matchesQuery =
+                    q.isEmpty || name.contains(q) || effectiveCategory.toLowerCase().contains(q);
+                final matchesCategory =
+                    _selectedCategory == null || _selectedCategory == normalizedCategory;
+                return matchesQuery && matchesCategory;
+              }).toList();
 
-              if (filtered.isEmpty) return const Center(child: Text('No exercises found'));
+              if (filtered.isEmpty) {
+                return const Center(child: Text('No exercises found'));
+              }
 
               return ListView.separated(
                 itemCount: filtered.length,
@@ -223,12 +390,16 @@ class _ExercisesTabState extends State<_ExercisesTab> {
                   final e = filtered[index];
                   final id = (e['id'] as num?)?.toInt();
                   final name = (e['name'] ?? 'Exercise').toString();
-                  final category = (e['category'] ?? 'Unknown').toString();
+                  final rawCategoryValue = (e['category'] ?? '').toString();
+                  final iconCategory =
+                      rawCategoryValue.trim().isEmpty ? 'Unknown' : rawCategoryValue;
+                  final normalizedCategory = _normalizeCategoryValue(rawCategoryValue);
+                  final displayCategory = _categoryLabel(normalizedCategory);
 
                   return ListTile(
-                    leading: Icon(exerciseCategoryIcon(category)),
+                    leading: Icon(exerciseCategoryIcon(iconCategory)),
                     title: Text(name),
-                    subtitle: Text('Primary: $category'),
+                    subtitle: Text('Primary: $displayCategory'),
                     onTap: id == null
                         ? null
                         : () => context.pushNamed(
@@ -241,7 +412,7 @@ class _ExercisesTabState extends State<_ExercisesTab> {
                               context,
                               id: id,
                               initialName: name,
-                              initialCategory: category,
+                              initialCategory: iconCategory,
                             ),
                   );
                 },
