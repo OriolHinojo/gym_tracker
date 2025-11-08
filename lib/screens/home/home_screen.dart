@@ -47,31 +47,36 @@ class HomeScreen extends StatelessWidget {
           // === Rebuild when preferred_exercise_id changes ===
           ValueListenableBuilder<int?>(
             valueListenable: LocalStore.instance.preferredExerciseIdListenable,
-            builder: (context, favId, _) {
+            builder: (context, _, __) {
               return ValueListenableBuilder<WeightUnit>(
                 valueListenable: LocalStore.instance.weightUnitListenable,
-                builder: (context, unit, __) {
-                  return FutureBuilder<HomeStats>(
-                    future: LocalStore.instance.getHomeStats(),
-                    builder: (context, snap) {
-                      if (snap.connectionState == ConnectionState.waiting) {
-                        return const SizedBox(
-                          height: 120,
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (snap.hasError) {
-                        return const SizedBox(
-                          height: 120,
-                          child: Center(child: Text('Failed to load stats')),
-                        );
-                      }
-                      final stats = snap.data ?? const HomeStats(0, 0.0, '—', null, '—');
-                      final items = stats.toItems(
-                        unit: unit,
-                        onTapWeekly: (ctx) => showHomeCalendarSheet(ctx),
+                builder: (context, unit, _) {
+                  return ValueListenableBuilder<int>(
+                    valueListenable: LocalStore.instance.workoutsRevisionListenable,
+                    builder: (context, __, _) {
+                      return FutureBuilder<HomeStats>(
+                        future: LocalStore.instance.getHomeStats(),
+                        builder: (context, snap) {
+                          if (snap.connectionState == ConnectionState.waiting) {
+                            return const SizedBox(
+                              height: 120,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          if (snap.hasError) {
+                            return const SizedBox(
+                              height: 120,
+                              child: Center(child: Text('Failed to load stats')),
+                            );
+                          }
+                          final stats = snap.data ?? const HomeStats(0, 0.0, '—', null, '—');
+                          final items = stats.toItems(
+                            unit: unit,
+                            onTapWeekly: (ctx) => showHomeCalendarSheet(ctx),
+                          );
+                          return _SummaryGrid(items: items);
+                        },
                       );
-                      return _SummaryGrid(items: items);
                     },
                   );
                 },
@@ -160,56 +165,61 @@ class _RecentSessionsCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: LocalStore.instance.listRecentWorkoutsRaw(limit: 5),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
-          return Card(
-            child: SizedBox(
-              height: 140,
-              child: Center(
-                child: CircularProgressIndicator(color: scheme.primary),
-              ),
-            ),
-          );
-        }
-        if (snap.hasError) {
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Could not load recent sessions.',
-                style: textTheme.bodyMedium,
-              ),
-            ),
-          );
-        }
-
-        final sessions = (snap.data ?? const <Map<String, dynamic>>[])
-            .where((s) => s['id'] != null)
-            .toList();
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Recent Sessions',
-                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+    return ValueListenableBuilder<int>(
+      valueListenable: LocalStore.instance.workoutsRevisionListenable,
+      builder: (context, __, ___) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: LocalStore.instance.listRecentWorkoutsRaw(limit: 5),
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting && !snap.hasData) {
+              return Card(
+                child: SizedBox(
+                  height: 140,
+                  child: Center(
+                    child: CircularProgressIndicator(color: scheme.primary),
+                  ),
                 ),
-                const SizedBox(height: 12),
-                if (sessions.isEmpty)
-                  Text(
-                    'Log a workout to see it listed here.',
+              );
+            }
+            if (snap.hasError) {
+              return Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Could not load recent sessions.',
                     style: textTheme.bodyMedium,
-                  )
-                else
-                  ..._buildSessionTiles(context, sessions, scheme, textTheme),
-              ],
-            ),
-          ),
+                  ),
+                ),
+              );
+            }
+
+            final sessions = (snap.data ?? const <Map<String, dynamic>>[])
+                .where((s) => s['id'] != null)
+                .toList();
+
+            return Card(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Recent Sessions',
+                      style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 12),
+                    if (sessions.isEmpty)
+                      Text(
+                        'Log a workout to see it listed here.',
+                        style: textTheme.bodyMedium,
+                      )
+                    else
+                      ..._buildSessionTiles(context, sessions, scheme, textTheme),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );

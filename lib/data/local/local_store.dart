@@ -29,6 +29,10 @@ class LocalStore {
   final ValueNotifier<WeightUnit> _weightUnit = ValueNotifier<WeightUnit>(WeightUnit.kilograms);
   ValueListenable<WeightUnit> get weightUnitListenable => _weightUnit;
 
+  // Notifier: bumps whenever workouts or sets mutate.
+  final ValueNotifier<int> _workoutsRevision = ValueNotifier<int>(0);
+  ValueListenable<int> get workoutsRevisionListenable => _workoutsRevision;
+
   /// Initializes the local database file and loads it into memory.
   Future<void> init() async {
     if (_initComp != null) return _initComp!.future;
@@ -117,6 +121,10 @@ class LocalStore {
     await tmp.rename(_file!.path);
   }
 
+  void _notifyWorkoutsChanged() {
+    _workoutsRevision.value = _workoutsRevision.value + 1;
+  }
+
   bool _ensureTemplateMetadata() {
     bool workoutsUpdated = false;
     bool setsUpdated = false;
@@ -194,6 +202,7 @@ class LocalStore {
     _initComp = null;
     _preferredExerciseId.value = null;
     _weightUnit.value = WeightUnit.kilograms;
+    _workoutsRevision.value = 0;
     _overrideAppDir = null;
     if (deleteFile && file != null) {
       try {
@@ -624,6 +633,7 @@ class LocalStore {
     _db['workouts'] = workouts;
     _db['sets'] = sets;
     await _save();
+    _notifyWorkoutsChanged();
   }
 
   Future<void> updateWorkout({
@@ -704,6 +714,7 @@ class LocalStore {
     _db['workouts'] = workouts;
     _db['sets'] = allSets;
     await _save();
+    _notifyWorkoutsChanged();
   }
 
   // ----- Persist a finished workout (and its sets) -----
@@ -758,6 +769,7 @@ class LocalStore {
     _db['workouts'] = workouts;
     _db['sets'] = allSets;
     await _save();
+    _notifyWorkoutsChanged();
     return wid;
   }
 
