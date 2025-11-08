@@ -71,115 +71,15 @@ Future<_ExerciseDialogResult?> _showExerciseDialog(
   String? initialName,
   String? initialCategory,
 }) async {
-  final nameCtrl = TextEditingController();
-  final customCatCtrl = TextEditingController();
-  String selectedCategory = _exerciseCategories.first['value']!;
-
-  if (initialName != null && initialName.isNotEmpty) {
-    nameCtrl.text = initialName;
-  }
-
-  String? resolved = _resolveCategoryValue(initialCategory);
-  if (resolved != null) {
-    selectedCategory = resolved;
-  } else if (initialCategory != null && initialCategory.isNotEmpty) {
-    selectedCategory = 'other';
-    customCatCtrl.text = initialCategory;
-  }
-
-  try {
-    return await showDialog<_ExerciseDialogResult>(
-      context: context,
-      builder: (dialogCtx) => StatefulBuilder(
-        builder: (dialogCtx, setDialogState) {
-          final optionStyle =
-              Theme.of(dialogCtx).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400);
-
-          return AlertDialog(
-            title: Text(title),
-            content: SingleChildScrollView(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(dialogCtx).viewInsets.bottom),
-              child: SizedBox(
-                width: _dialogContentWidth(dialogCtx, 360),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Name'),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      value: selectedCategory,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Category'),
-                      items: _exerciseCategories
-                          .map(
-                            (c) => DropdownMenuItem<String>(
-                              value: c['value'],
-                              child: Text(
-                                c['label']!,
-                                style: optionStyle,
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() {
-                          selectedCategory = value;
-                          if (selectedCategory != 'other') {
-                            customCatCtrl.clear();
-                          }
-                        });
-                      },
-                    ),
-                    if (selectedCategory == 'other') ...[
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: customCatCtrl,
-                        decoration: const InputDecoration(labelText: 'Custom category'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogCtx).pop(),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () {
-                  final name = nameCtrl.text.trim();
-                  if (name.isEmpty) return;
-
-                  var category = selectedCategory;
-                  if (category == 'other') {
-                    final custom = customCatCtrl.text.trim();
-                    if (custom.isNotEmpty) {
-                      category = custom;
-                    }
-                  }
-
-                  Navigator.of(dialogCtx).pop(
-                    _ExerciseDialogResult(name: name, category: category),
-                  );
-                },
-                child: Text(isEditing ? 'Save' : 'Create'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  } finally {
-    await Future<void>.delayed(Duration.zero);
-    nameCtrl.dispose();
-    customCatCtrl.dispose();
-  }
+  return showDialog<_ExerciseDialogResult>(
+    context: context,
+    builder: (dialogCtx) => _ExerciseDialog(
+      title: title,
+      isEditing: isEditing,
+      initialName: initialName,
+      initialCategory: initialCategory,
+    ),
+  );
 }
 
 String? _resolveCategoryValue(String? category) {
@@ -200,4 +100,136 @@ double _dialogContentWidth(BuildContext context, double fallbackWidth) {
     return fallbackWidth;
   }
   return available;
+}
+
+class _ExerciseDialog extends StatefulWidget {
+  const _ExerciseDialog({
+    required this.title,
+    required this.isEditing,
+    this.initialName,
+    this.initialCategory,
+  });
+
+  final String title;
+  final bool isEditing;
+  final String? initialName;
+  final String? initialCategory;
+
+  @override
+  State<_ExerciseDialog> createState() => _ExerciseDialogState();
+}
+
+class _ExerciseDialogState extends State<_ExerciseDialog> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _customCatCtrl;
+  late String _selectedCategory;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName ?? '');
+    _customCatCtrl = TextEditingController();
+    _selectedCategory = _exerciseCategories.first['value']!;
+
+    final resolved = _resolveCategoryValue(widget.initialCategory);
+    if (resolved != null) {
+      _selectedCategory = resolved;
+    } else if (widget.initialCategory != null && widget.initialCategory!.isNotEmpty) {
+      _selectedCategory = 'other';
+      _customCatCtrl.text = widget.initialCategory!;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _customCatCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final optionStyle = theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w400);
+
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: SizedBox(
+          width: _dialogContentWidth(context, 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: 'Name'),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                value: _selectedCategory,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Category'),
+                items: _exerciseCategories
+                    .map(
+                      (c) => DropdownMenuItem<String>(
+                        value: c['value'],
+                        child: Text(
+                          c['label']!,
+                          style: optionStyle,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _selectedCategory = value;
+                    if (_selectedCategory != 'other') {
+                      _customCatCtrl.clear();
+                    }
+                  });
+                },
+              ),
+              if (_selectedCategory == 'other') ...[
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _customCatCtrl,
+                  decoration: const InputDecoration(labelText: 'Custom category'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: Text(widget.isEditing ? 'Save' : 'Create'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) return;
+
+    var category = _selectedCategory;
+    if (category == 'other') {
+      final custom = _customCatCtrl.text.trim();
+      if (custom.isNotEmpty) {
+        category = custom;
+      }
+    }
+
+    Navigator.of(context).pop(
+      _ExerciseDialogResult(name: name, category: category),
+    );
+  }
 }
