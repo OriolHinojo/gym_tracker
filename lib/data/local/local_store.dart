@@ -217,120 +217,21 @@ class LocalStore {
       {'id': 1, 'name': 'Bench Press', 'category': 'compound'},
       {'id': 2, 'name': 'Back Squat', 'category': 'compound'},
       {'id': 3, 'name': 'Deadlift', 'category': 'compound'},
-    ];
-
-    // Workouts: one last week, two this week (UTC).
-    final lastWeek = now.subtract(const Duration(days: 9));
-    final workout1 = {
-      'id': 1,
-      'user_id': 1,
-      'name': 'Leg Day',
-      'started_at': lastWeek.toIso8601String(),
-      'notes': '',
-      'template_id': null,
-    };
-
-    final mondayThisWeek = _mondayOfWeek(now);
-    final workout2Start = mondayThisWeek.add(const Duration(days: 1)); // Tuesday
-    final workout3Start = mondayThisWeek.add(const Duration(days: 2, hours: 2)); // Wednesday + 2h
-
-    final workout2 = {
-      'id': 2,
-      'user_id': 1,
-      'name': 'Push Day',
-      'started_at': workout2Start.toIso8601String(),
-      'notes': '',
-      'template_id': null,
-    };
-
-    final workout3 = {
-      'id': 3,
-      'user_id': 1,
-      'name': 'Full Body',
-      'started_at': workout3Start.toIso8601String(),
-      'notes': '',
-      'template_id': null,
-    };
-
-    // Sets (ensure ordinals reflect order, weights > 0)
-    final sets = [
-      // workout1 (last week)
-      {
-        'id': 1,
-        'workout_id': 1,
-        'user_id': 1,
-        'exercise_id': 2,
-        'ordinal': 1,
-        'reps': 5,
-        'weight': 120,
-        'created_at': lastWeek.toIso8601String(),
-        'template_id': null,
-        'tag': null,
-      },
-      {
-        'id': 2,
-        'workout_id': 1,
-        'user_id': 1,
-        'exercise_id': 3,
-        'ordinal': 2,
-        'reps': 3,
-        'weight': 160,
-        'created_at': lastWeek.toIso8601String(),
-        'template_id': null,
-        'tag': null,
-      },
-
-      // workout2 (this week)
-      {
-        'id': 3,
-        'workout_id': 2,
-        'user_id': 1,
-        'exercise_id': 1,
-        'ordinal': 1,
-        'reps': 5,
-        'weight': 90,
-        'created_at': workout2Start.toIso8601String(),
-        'template_id': null,
-        'tag': null,
-      },
-      {
-        'id': 4,
-        'workout_id': 2,
-        'user_id': 1,
-        'exercise_id': 1,
-        'ordinal': 2,
-        'reps': 3,
-        'weight': 100,
-        'created_at': workout2Start.toIso8601String(),
-        'template_id': null,
-        'tag': null,
-      },
-
-      // workout3 (this week)
-      {
-        'id': 5,
-        'workout_id': 3,
-        'user_id': 1,
-        'exercise_id': 2,
-        'ordinal': 1,
-        'reps': 5,
-        'weight': 130,
-        'created_at': workout3Start.toIso8601String(),
-        'template_id': null,
-        'tag': null,
-      },
-      {
-        'id': 6,
-        'workout_id': 3,
-        'user_id': 1,
-        'exercise_id': 1,
-        'ordinal': 2,
-        'reps': 2,
-        'weight': 105,
-        'created_at': workout3Start.toIso8601String(),
-        'template_id': null,
-        'tag': null,
-      },
+      {'id': 4, 'name': 'Overhead Press', 'category': 'compound'},
+      {'id': 5, 'name': 'Incline Dumbbell Press', 'category': 'accessory'},
+      {'id': 6, 'name': 'Dumbbell Fly', 'category': 'accessory'},
+      {'id': 7, 'name': 'Tricep Dip', 'category': 'accessory'},
+      {'id': 8, 'name': 'Tricep Pushdown', 'category': 'isolation'},
+      {'id': 9, 'name': 'Pull-Up', 'category': 'compound'},
+      {'id': 10, 'name': 'Barbell Row', 'category': 'compound'},
+      {'id': 11, 'name': 'Lat Pulldown', 'category': 'accessory'},
+      {'id': 12, 'name': 'Seated Cable Row', 'category': 'accessory'},
+      {'id': 13, 'name': 'Bicep Curl', 'category': 'isolation'},
+      {'id': 14, 'name': 'Hammer Curl', 'category': 'isolation'},
+      {'id': 15, 'name': 'Leg Press', 'category': 'compound'},
+      {'id': 16, 'name': 'Bulgarian Split Squat', 'category': 'accessory'},
+      {'id': 17, 'name': 'Romanian Deadlift', 'category': 'compound'},
+      {'id': 18, 'name': 'Calf Raise', 'category': 'isolation'},
     ];
 
     _db = {
@@ -341,28 +242,33 @@ class LocalStore {
       },
       'users': [user],
       'exercises': exercises,
-      'workouts': [workout1, workout2, workout3],
-      'sets': sets,
+      // No sessions are pre-seeded; users start with empty history.
+      'workouts': <Map<String, dynamic>>[],
+      'sets': <Map<String, dynamic>>[],
       // Workout templates (named groups of exercises)
       'workout_templates': <Map<String, dynamic>>[
         {
           'id': 1,
           'name': 'Push Day',
-          'exercise_ids': [1], // Bench
+          'exercise_ids': [1, 4, 5, 7, 8],
+          'created_at': now.toIso8601String(),
+        },
+        {
+          'id': 2,
+          'name': 'Leg Day',
+          'exercise_ids': [2, 15, 16, 17, 18],
+          'created_at': now.toIso8601String(),
+        },
+        {
+          'id': 3,
+          'name': 'Pull Day',
+          'exercise_ids': [3, 9, 10, 11, 13],
           'created_at': now.toIso8601String(),
         },
       ],
       'prs': [],
       'body_metrics': [],
     };
-  }
-
-  /// Returns the Monday of the current week (UTC).
-  DateTime _mondayOfWeek(DateTime utcNow) {
-    final weekday = utcNow.weekday; // Monday = 1
-    final monday = DateTime.utc(utcNow.year, utcNow.month, utcNow.day)
-        .subtract(Duration(days: weekday - 1));
-    return monday;
   }
 
   // ---------------------------------------------------------------------------
@@ -379,6 +285,14 @@ class LocalStore {
     if (value == null) return null;
     final tag = setTagFromStorage(value is String ? value : value.toString());
     return tag?.storage;
+  }
+
+  /// Returns the Monday of the week for a UTC [utcNow] instant.
+  DateTime _mondayOfWeek(DateTime utcNow) {
+    final weekday = utcNow.weekday; // Monday = 1
+    final monday = DateTime.utc(utcNow.year, utcNow.month, utcNow.day)
+        .subtract(Duration(days: weekday - 1));
+    return monday;
   }
 
   // ---------------------------------------------------------------------------
