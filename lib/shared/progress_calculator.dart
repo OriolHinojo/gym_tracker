@@ -18,6 +18,7 @@ class ProgressCalculator {
     List<Map<String, dynamic>> rawSets, {
     required ProgressAggMode mode,
     required ProgressRange range,
+    required ProgressMetric metric,
   }) {
     if (rawSets.isEmpty) return const [];
 
@@ -40,11 +41,10 @@ class ProgressCalculator {
     }
 
     final points = switch (mode) {
-      ProgressAggMode.avgPerSession =>
-        _buildAveragePerSessionPoints(byWorkout.values),
-      ProgressAggMode.set1 => _buildOrdinalPoints(byWorkout.values, 1),
-      ProgressAggMode.set2 => _buildOrdinalPoints(byWorkout.values, 2),
-      ProgressAggMode.set3 => _buildOrdinalPoints(byWorkout.values, 3),
+      ProgressAggMode.avgPerSession => _buildAveragePerSessionPoints(byWorkout.values, metric),
+      ProgressAggMode.set1 => _buildOrdinalPoints(byWorkout.values, metric, 1),
+      ProgressAggMode.set2 => _buildOrdinalPoints(byWorkout.values, metric, 2),
+      ProgressAggMode.set3 => _buildOrdinalPoints(byWorkout.values, metric, 3),
     };
 
     points.sort((a, b) => a.date.compareTo(b.date));
@@ -65,27 +65,47 @@ class ProgressCalculator {
 
   List<ProgressPoint> _buildAveragePerSessionPoints(
     Iterable<List<ProgressSet>> grouped,
+    ProgressMetric metric,
   ) {
     return grouped.map((sets) {
       final latest = sets
           .map((s) => s.createdAt)
           .reduce((a, b) => a.isAfter(b) ? a : b);
-      final totalWeight = sets.fold<double>(0.0, (prev, set) => prev + set.weight);
-      final totalReps = sets.fold<int>(0, (prev, set) => prev + set.reps);
-      final double avgWeight = sets.isEmpty ? 0.0 : totalWeight / sets.length;
-      final double avgReps = sets.isEmpty ? 0.0 : totalReps / sets.length;
+      switch (metric) {
+        case ProgressMetric.weight:
+          final totalWeight = sets.fold<double>(0.0, (prev, set) => prev + set.weight);
+          final totalReps = sets.fold<int>(0, (prev, set) => prev + set.reps);
+          final double avgWeight = sets.isEmpty ? 0.0 : totalWeight / sets.length;
+          final double avgReps = sets.isEmpty ? 0.0 : totalReps / sets.length;
 
-      return ProgressPoint(
-        date: latest,
-        yWeight: avgWeight,
-        reps: avgReps.round(),
-        label: avgWeight.toStringAsFixed(1),
-      );
+          return ProgressPoint(
+            date: latest,
+            valueKg: avgWeight,
+            reps: avgReps.round(),
+            label: avgWeight.toStringAsFixed(1),
+          );
+        case ProgressMetric.estimatedOneRm:
+          final best = sets.fold<ProgressSet?>(null, (prev, set) {
+            if (prev == null) return set;
+            return _estimateOneRm(set.weight, set.reps) > _estimateOneRm(prev.weight, prev.reps)
+                ? set
+                : prev;
+          });
+          final bestSet = best ?? sets.first;
+          final estimate = _estimateOneRm(bestSet.weight, bestSet.reps);
+          return ProgressPoint(
+            date: latest,
+            valueKg: estimate,
+            reps: bestSet.reps,
+            label: estimate.toStringAsFixed(1),
+          );
+      }
     }).toList();
   }
 
   List<ProgressPoint> _buildOrdinalPoints(
     Iterable<List<ProgressSet>> grouped,
+    ProgressMetric metric,
     int targetOrdinal,
   ) {
     return grouped.map((sets) {
@@ -94,12 +114,28 @@ class ProgressCalculator {
         (s) => s.ordinal == targetOrdinal,
         orElse: () => sets.first,
       );
-      return ProgressPoint(
-        date: selected.createdAt,
-        yWeight: selected.weight,
-        reps: selected.reps,
-        label: selected.weight.toStringAsFixed(1),
-      );
+      switch (metric) {
+        case ProgressMetric.weight:
+          return ProgressPoint(
+            date: selected.createdAt,
+            valueKg: selected.weight,
+            reps: selected.reps,
+            label: selected.weight.toStringAsFixed(1),
+          );
+        case ProgressMetric.estimatedOneRm:
+          final estimate = _estimateOneRm(selected.weight, selected.reps);
+          return ProgressPoint(
+            date: selected.createdAt,
+            valueKg: estimate,
+            reps: selected.reps,
+            label: estimate.toStringAsFixed(1),
+          );
+      }
     }).toList();
+  }
+
+  double _estimateOneRm(double weight, int reps) {
+    if (reps <= 1) return weight;
+    return weight * (1 + reps / 30);
   }
 }

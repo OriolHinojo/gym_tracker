@@ -43,6 +43,26 @@ extension ProgressRangeLabels on ProgressRange {
       };
 }
 
+/// Metric that can be plotted in the progress charts.
+enum ProgressMetric { weight, estimatedOneRm }
+
+extension ProgressMetricLabels on ProgressMetric {
+  String get label => switch (this) {
+        ProgressMetric.weight => 'Weight',
+        ProgressMetric.estimatedOneRm => 'Est. 1RM',
+      };
+
+  String get subtitle => switch (this) {
+        ProgressMetric.weight => 'Average / selected set weight',
+        ProgressMetric.estimatedOneRm => 'Epley-based estimate',
+      };
+
+  String get chipLabel => switch (this) {
+        ProgressMetric.weight => 'Weight',
+        ProgressMetric.estimatedOneRm => 'e1RM',
+      };
+}
+
 /// Normalised set information parsed from the local store.
 class ProgressSet {
   ProgressSet({
@@ -64,14 +84,13 @@ class ProgressSet {
 class ProgressPoint {
   const ProgressPoint({
     required this.date,
-    required this.yWeight,
+    required this.valueKg,
     required this.reps,
     this.label,
   });
 
   final DateTime date;
-  final double yWeight;
+  final double valueKg;
   final int reps;
   final String? label;
 }
-

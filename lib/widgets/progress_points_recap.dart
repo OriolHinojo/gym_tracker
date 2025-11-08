@@ -6,10 +6,16 @@ import '../shared/weight_units.dart';
 
 /// Reusable card summarising the raw progress datapoints in a simple list.
 class ProgressPointsRecap extends StatelessWidget {
-  const ProgressPointsRecap({super.key, required this.points, required this.weightUnit});
+  const ProgressPointsRecap({
+    super.key,
+    required this.points,
+    required this.weightUnit,
+    required this.metric,
+  });
 
   final List<ProgressPoint> points;
   final WeightUnit weightUnit;
+  final ProgressMetric metric;
 
   @override
   Widget build(BuildContext context) {
@@ -19,9 +25,13 @@ class ProgressPointsRecap extends StatelessWidget {
     return Card(
       child: Column(
         children: [
-          const ListTile(
-            title: Text('Data points'),
-            subtitle: Text('Weight is primary; reps shown as secondary'),
+          ListTile(
+            title: const Text('Data points'),
+            subtitle: Text(
+              metric == ProgressMetric.weight
+                  ? 'Weight is primary; reps shown as secondary'
+                  : 'Estimated 1RM (Epley) with reps reference',
+            ),
           ),
           const Divider(height: 1),
           ...points.map((p) => _buildTile(p)),
@@ -35,7 +45,7 @@ class ProgressPointsRecap extends StatelessWidget {
     final date = formatDateYmd(point.date.toLocal());
     return ListTile(
       dense: true,
-      title: Text('$date - ${formatCompactWeight(point.yWeight, weightUnit)}'),
+      title: Text('$date - ${formatCompactWeight(point.valueKg, weightUnit)}'),
       trailing: Text('${point.reps} reps'),
     );
   }

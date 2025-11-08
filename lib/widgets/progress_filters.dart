@@ -14,6 +14,9 @@ class ProgressFilters extends StatelessWidget {
     required this.onModeChanged,
     required this.onRangeChanged,
     this.leading = const <Widget>[],
+    this.metric,
+    this.metricOptions = const <ProgressMetric>[],
+    this.onMetricChanged,
   });
 
   final ProgressAggMode mode;
@@ -21,9 +24,16 @@ class ProgressFilters extends StatelessWidget {
   final ValueChanged<ProgressAggMode> onModeChanged;
   final ValueChanged<ProgressRange> onRangeChanged;
   final List<Widget> leading;
+  final ProgressMetric? metric;
+  final List<ProgressMetric> metricOptions;
+  final ValueChanged<ProgressMetric>? onMetricChanged;
 
   @override
   Widget build(BuildContext context) {
+    final shouldShowMetric = metric != null &&
+        onMetricChanged != null &&
+        metricOptions.isNotEmpty;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -42,6 +52,19 @@ class ProgressFilters extends StatelessWidget {
               )
               .toList(),
         ),
+        if (shouldShowMetric)
+          Wrap(
+            spacing: 6,
+            children: metricOptions
+                .map(
+                  (metricOption) => ChoiceChip(
+                        label: Text(metricOption.chipLabel),
+                        selected: metricOption == metric,
+                        onSelected: (_) => onMetricChanged?.call(metricOption),
+                      ),
+                )
+                .toList(),
+          ),
         Wrap(
           spacing: 6,
           children: ProgressRange.values
@@ -58,4 +81,3 @@ class ProgressFilters extends StatelessWidget {
     );
   }
 }
-

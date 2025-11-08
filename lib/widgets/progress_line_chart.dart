@@ -10,10 +10,16 @@ import '../shared/weight_units.dart';
 /// The painter is kept intentionally lightweight so it can be reused anywhere
 /// a small sparkline-style chart is needed.
 class ProgressLineChart extends StatelessWidget {
-  const ProgressLineChart({super.key, required this.points, required this.weightUnit});
+  const ProgressLineChart({
+    super.key,
+    required this.points,
+    required this.weightUnit,
+    required this.metric,
+  });
 
   final List<ProgressPoint> points;
   final WeightUnit weightUnit;
+  final ProgressMetric metric;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +31,7 @@ class ProgressLineChart extends StatelessWidget {
         textColor: theme.colorScheme.onSurface,
         subtleTextColor: theme.colorScheme.onSurfaceVariant,
         weightUnit: weightUnit,
+        metric: metric,
       ),
       child: const SizedBox.expand(),
     );
@@ -38,6 +45,7 @@ class _ProgressLineChartPainter extends CustomPainter {
     required this.textColor,
     required this.subtleTextColor,
     required this.weightUnit,
+    required this.metric,
   });
 
   final List<ProgressPoint> points;
@@ -45,6 +53,7 @@ class _ProgressLineChartPainter extends CustomPainter {
   final Color textColor;
   final Color subtleTextColor;
   final WeightUnit weightUnit;
+  final ProgressMetric metric;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -74,7 +83,7 @@ class _ProgressLineChartPainter extends CustomPainter {
     if (points.isEmpty) return;
 
     final convertedWeights = points
-        .map((p) => weightUnit.fromKilograms(p.yWeight))
+        .map((p) => weightUnit.fromKilograms(p.valueKg))
         .toList(growable: false);
     double minY = convertedWeights.reduce((a, b) => a < b ? a : b);
     double maxY = convertedWeights.reduce((a, b) => a > b ? a : b);
@@ -132,9 +141,9 @@ class _ProgressLineChartPainter extends CustomPainter {
     final path = Path();
     for (int i = 0; i < points.length; i++) {
       final point = points[i];
-      final weight = convertedWeights[i];
+      final valueInUnit = convertedWeights[i];
       final x = xPositions[i];
-      final y = yFor(weight);
+      final y = yFor(valueInUnit);
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -145,26 +154,37 @@ class _ProgressLineChartPainter extends CustomPainter {
 
     for (int i = 0; i < points.length; i++) {
       final point = points[i];
-      final weight = convertedWeights[i];
+      final valueInUnit = convertedWeights[i];
       final x = xPositions[i];
-      final y = yFor(weight);
+      final y = yFor(valueInUnit);
       canvas.drawCircle(Offset(x, y), 3.5, paintDot);
 
       final weightStyle = baseTextStyle.copyWith(fontWeight: FontWeight.w600);
       final weightText = TextPainter(
-        text: TextSpan(text: formatSetWeight(point.yWeight, weightUnit), style: weightStyle),
+        text: TextSpan(text: formatSetWeight(point.valueKg, weightUnit), style: weightStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       weightText.paint(canvas, Offset(x - weightText.width / 2, y - 18));
 
-      final repsText = TextPainter(
-        text: TextSpan(
-          text: '${point.reps}r',
-          style: baseTextStyle.copyWith(fontSize: 10, color: subtleTextColor),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      repsText.paint(canvas, Offset(x - repsText.width / 2, y + 4));
+      if (metric == ProgressMetric.weight) {
+        final repsText = TextPainter(
+          text: TextSpan(
+            text: '${point.reps}r',
+            style: baseTextStyle.copyWith(fontSize: 10, color: subtleTextColor),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        repsText.paint(canvas, Offset(x - repsText.width / 2, y + 4));
+      } else {
+        final detailText = TextPainter(
+          text: TextSpan(
+            text: '${point.reps}r (est)',
+            style: baseTextStyle.copyWith(fontSize: 10, color: subtleTextColor),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+        detailText.paint(canvas, Offset(x - detailText.width / 2, y + 4));
+      }
 
       final dateText = TextPainter(
         text: TextSpan(
@@ -206,7 +226,8 @@ class _ProgressLineChartPainter extends CustomPainter {
       oldDelegate.colorScheme != colorScheme ||
       oldDelegate.textColor != textColor ||
       oldDelegate.subtleTextColor != subtleTextColor ||
-      oldDelegate.weightUnit != weightUnit;
+      oldDelegate.weightUnit != weightUnit ||
+      oldDelegate.metric != metric;
 }
 
 DateTime _weekStart(DateTime date) {

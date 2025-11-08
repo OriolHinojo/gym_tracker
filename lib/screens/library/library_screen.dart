@@ -595,6 +595,7 @@ class ExerciseDetailScreen extends StatefulWidget {
 class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   ProgressAggMode _mode = ProgressAggMode.avgPerSession;
   ProgressRange _range = ProgressRange.w8;
+  ProgressMetric _metric = ProgressMetric.weight;
   int? _preferredId;
   final ProgressCalculator _calculator = const ProgressCalculator();
   late Future<_ExerciseVM> _future;
@@ -615,6 +616,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       sets,
       mode: _mode,
       range: _range,
+      metric: _metric,
     );
     final bestOneRm = _computeBestOneRm(sets);
     return _ExerciseVM(
@@ -622,13 +624,15 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       name: name,
       category: category,
       series: points,
+      metric: _metric,
       bestOneRmKilos: bestOneRm,
     );
   }
 
-  void _reload({ProgressAggMode? mode, ProgressRange? range}) {
+  void _reload({ProgressAggMode? mode, ProgressRange? range, ProgressMetric? metric}) {
     if (mode != null) _mode = mode;
     if (range != null) _range = range;
+    if (metric != null) _metric = metric;
     setState(() {
       _future = _load();
     });
@@ -676,8 +680,11 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
               ProgressFilters(
                 mode: _mode,
                 range: _range,
+                metric: _metric,
+                metricOptions: ProgressMetric.values,
                 onModeChanged: (m) => _reload(mode: m),
                 onRangeChanged: (r) => _reload(range: r),
+                onMetricChanged: (m) => _reload(metric: m),
               ),
               const SizedBox(height: 12),
               ValueListenableBuilder<WeightUnit>(
@@ -745,18 +752,28 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Weight Trend',
-                                  style: Theme.of(context).textTheme.titleMedium),
                               Text(
-                                _mode == ProgressAggMode.avgPerSession
-                                    ? 'Average weight per session'
-                                    : 'Set order: ${_mode.label}',
+                                _metric == ProgressMetric.weight ? 'Weight Trend' : 'Estimated 1RM Trend',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              Text(
+                                _metric == ProgressMetric.weight
+                                    ? (_mode == ProgressAggMode.avgPerSession
+                                        ? 'Average weight per session'
+                                        : 'Set order: ${_mode.label}')
+                                    : (_mode == ProgressAggMode.avgPerSession
+                                        ? 'Heaviest set estimate (Epley)'
+                                        : 'Set order: ${_mode.label} · Epley estimate'),
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                               const SizedBox(height: 12),
                               Flexible(
                                 fit: FlexFit.tight,
-                                child: ProgressLineChart(points: vm.series, weightUnit: unit),
+                                child: ProgressLineChart(
+                                  points: vm.series,
+                                  weightUnit: unit,
+                                  metric: vm.metric,
+                                ),
                               ),
                             ],
                           ),
@@ -764,7 +781,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    ProgressPointsRecap(points: vm.series, weightUnit: unit),
+                    ProgressPointsRecap(points: vm.series, weightUnit: unit, metric: vm.metric),
                   ],
                 ),
               ),
@@ -784,12 +801,14 @@ class _ExerciseVM {
   final String name;
   final String category;
   final List<ProgressPoint> series;
+  final ProgressMetric metric;
   final double? bestOneRmKilos;
   _ExerciseVM({
     required this.id,
     required this.name,
     required this.category,
     required this.series,
+    required this.metric,
     required this.bestOneRmKilos,
   });
 }

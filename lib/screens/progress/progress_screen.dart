@@ -491,6 +491,7 @@ class _ExercisesTabState extends State<_ExercisesTab> {
   String _selectedExerciseName = '';
   ProgressAggMode _mode = ProgressAggMode.avgPerSession;
   ProgressRange _range = ProgressRange.w8;
+  ProgressMetric _metric = ProgressMetric.weight;
   final Set<SetTag> _tagFilters = <SetTag>{};
   final Set<TimeOfDayBucket> _timeFilters = <TimeOfDayBucket>{};
 
@@ -529,6 +530,7 @@ class _ExercisesTabState extends State<_ExercisesTab> {
       sets,
       mode: _mode,
       range: _range,
+      metric: _metric,
     );
 
     final aggregates = <int, _ExerciseSessionAggregate>{};
@@ -591,17 +593,25 @@ class _ExercisesTabState extends State<_ExercisesTab> {
       selectedExerciseName: _selectedExerciseName,
       mode: _mode,
       range: _range,
+      metric: _metric,
       series: series,
       analytics: analytics,
       lastSessionWeight: lastSessionWeight,
     );
   }
 
-  void _reload({int? exerciseId, String? exerciseName, ProgressAggMode? mode, ProgressRange? range}) {
+  void _reload({
+    int? exerciseId,
+    String? exerciseName,
+    ProgressAggMode? mode,
+    ProgressRange? range,
+    ProgressMetric? metric,
+  }) {
     if (exerciseId != null) _selectedExerciseId = exerciseId;
     if (exerciseName != null) _selectedExerciseName = exerciseName;
     if (mode != null) _mode = mode;
     if (range != null) _range = range;
+    if (metric != null) _metric = metric;
     setState(() {
       _future = _load();
     });
@@ -832,18 +842,28 @@ class _ExercisesTabState extends State<_ExercisesTab> {
             ),
             const SizedBox(height: 12),
             _ChartCard(
-              title: 'Weight Trend — ${vm.selectedExerciseName}',
-              subtitle:
-                  vm.mode == ProgressAggMode.avgPerSession ? 'Average weight per session' : 'Set order: ${vm.mode.label}',
+              title:
+                  '${vm.metric == ProgressMetric.weight ? 'Weight' : 'Estimated 1RM'} Trend — ${vm.selectedExerciseName}',
+              subtitle: vm.metric == ProgressMetric.weight
+                  ? (vm.mode == ProgressAggMode.avgPerSession
+                      ? 'Average weight per session'
+                      : 'Set order: ${vm.mode.label}')
+                  : (vm.mode == ProgressAggMode.avgPerSession
+                      ? 'Heaviest set estimate (Epley)'
+                      : 'Set order: ${vm.mode.label} · Epley estimate'),
               points: vm.series,
               weightUnit: widget.weightUnit,
+              metric: vm.metric,
             ),
             const SizedBox(height: 16),
             ProgressFilters(
               mode: vm.mode,
               range: vm.range,
+              metric: vm.metric,
+              metricOptions: ProgressMetric.values,
               onModeChanged: (mode) => _reload(mode: mode),
               onRangeChanged: (range) => _reload(range: range),
+              onMetricChanged: (metric) => _reload(metric: metric),
             ),
             const SizedBox(height: 16),
             if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
@@ -860,7 +880,11 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               ),
               const SizedBox(height: 12),
             ],
-            ProgressPointsRecap(points: vm.series, weightUnit: widget.weightUnit),
+            ProgressPointsRecap(
+              points: vm.series,
+              weightUnit: widget.weightUnit,
+              metric: vm.metric,
+            ),
           ],
         );
       },
@@ -1343,12 +1367,14 @@ class _ChartCard extends StatelessWidget {
     required this.subtitle,
     required this.points,
     required this.weightUnit,
+    required this.metric,
   });
 
   final String title;
   final String subtitle;
   final List<ProgressPoint> points;
   final WeightUnit weightUnit;
+  final ProgressMetric metric;
 
   @override
   Widget build(BuildContext context) {
@@ -1367,7 +1393,7 @@ class _ChartCard extends StatelessWidget {
               const SizedBox(height: 12),
               Flexible(
                 fit: FlexFit.tight,
-                child: ProgressLineChart(points: points, weightUnit: weightUnit),
+                child: ProgressLineChart(points: points, weightUnit: weightUnit, metric: metric),
               ),
             ],
           ),
@@ -1422,6 +1448,7 @@ class _ExerciseVM {
     required this.selectedExerciseName,
     required this.mode,
     required this.range,
+    required this.metric,
     required this.series,
     required this.analytics,
     required this.lastSessionWeight,
@@ -1432,6 +1459,7 @@ class _ExerciseVM {
   final String selectedExerciseName;
   final ProgressAggMode mode;
   final ProgressRange range;
+  final ProgressMetric metric;
   final List<ProgressPoint> series;
   final AnalyticsSnapshot analytics;
   final double? lastSessionWeight;
