@@ -692,6 +692,47 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                           subtitle: Text(
                             '${formatSetWeight(vm.bestOneRmKilos!, unit)} ${unit.label}',
                           ),
+                          trailing: IconButton(
+                            tooltip: 'How is this calculated?',
+                            icon: const Icon(Icons.info_outline),
+                            onPressed: () {
+                              showDialog<void>(
+                                context: context,
+                                builder: (dialogCtx) => AlertDialog(
+                                  title: const Text('Estimated 1RM'),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('We use the Epley formula to estimate your one-rep max from the heaviest set you have logged for this exercise.'),
+                                      const SizedBox(height: 12),
+                                      const Text(
+                                        'Formula',
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text('1RM ≈ weight × (1 + reps ÷ 30)'),
+                                      const SizedBox(height: 12),
+                                      const Text(
+                                        'Disclaimer',
+                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      const Text(
+                                        'This is a statistical estimate based on your logged data. Always lift responsibly and adjust loads according to how you feel.',
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dialogCtx),
+                                      child: const Text('Close'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
