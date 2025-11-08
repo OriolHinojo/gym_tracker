@@ -616,7 +616,14 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
       mode: _mode,
       range: _range,
     );
-    return _ExerciseVM(id: widget.id, name: name, category: category, series: points);
+    final bestOneRm = _computeBestOneRm(sets);
+    return _ExerciseVM(
+      id: widget.id,
+      name: name,
+      category: category,
+      series: points,
+      bestOneRmKilos: bestOneRm,
+    );
   }
 
   void _reload({ProgressAggMode? mode, ProgressRange? range}) {
@@ -677,6 +684,18 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                 valueListenable: LocalStore.instance.weightUnitListenable,
                 builder: (context, unit, _) => Column(
                   children: [
+                    if (vm.bestOneRmKilos != null) ...[
+                      Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.show_chart_outlined),
+                          title: const Text('Best estimated 1RM'),
+                          subtitle: Text(
+                            '${formatSetWeight(vm.bestOneRmKilos!, unit)} ${unit.label}',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Card(
                       child: SizedBox(
                         height: 260,
@@ -724,10 +743,30 @@ class _ExerciseVM {
   final String name;
   final String category;
   final List<ProgressPoint> series;
+  final double? bestOneRmKilos;
   _ExerciseVM({
     required this.id,
     required this.name,
     required this.category,
     required this.series,
+    required this.bestOneRmKilos,
   });
 }
+  double? _computeBestOneRm(List<Map<String, dynamic>> sets) {
+    double? best;
+    for (final row in sets) {
+      final weight = (row['weight'] as num?)?.toDouble();
+      final reps = (row['reps'] as num?)?.toInt();
+      if (weight == null || weight <= 0 || reps == null || reps <= 0) continue;
+      final estimate = _estimateOneRm(weight, reps);
+      if (best == null || estimate > best) {
+        best = estimate;
+      }
+    }
+    return best;
+  }
+
+  double _estimateOneRm(double weight, int reps) {
+    if (reps <= 1) return weight;
+    return weight * (1 + reps / 30);
+  }
