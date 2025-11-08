@@ -302,20 +302,18 @@ class _TemplatesTabState extends State<_TemplatesTab> {
           return const Center(child: Text('No templates yet. Create one in Library → Workouts.'));
         }
 
-        final dropdownItems = [
-          const DropdownMenuItem<int>(value: _allTemplates, child: Text('All templates')),
+        final templateOptions = [
+          const _DropdownOption(value: _allTemplates, label: 'All templates'),
           ...vm.templates.map(
-            (tpl) => DropdownMenuItem<int>(
-              value: tpl.id,
-              child: Text(tpl.name),
-            ),
+            (tpl) => _DropdownOption(value: tpl.id, label: tpl.name),
           ),
         ];
-        final contextLabel = vm.selectedTemplateId == _allTemplates
-            ? 'All templates'
-            : vm.templates.firstWhere((tpl) => tpl.id == vm.selectedTemplateId, orElse: () {
-                return _TemplateRow(id: vm.selectedTemplateId!, name: 'Template');
-              }).name;
+        final contextLabel = templateOptions
+            .firstWhere(
+              (option) => option.value == vm.selectedTemplateId,
+              orElse: () => templateOptions.first,
+            )
+            .label;
 
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -326,12 +324,34 @@ class _TemplatesTabState extends State<_TemplatesTab> {
                   fit: FlexFit.tight,
                   child: DropdownButtonFormField<int>(
                     value: vm.selectedTemplateId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Template',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
-                    items: dropdownItems,
+                    items: templateOptions
+                        .map(
+                          (option) => DropdownMenuItem<int>(
+                            value: option.value,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(option.label),
+                          ),
+                        )
+                        .toList(),
+                    selectedItemBuilder: (context) => templateOptions
+                        .map(
+                          (option) => Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              option.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                            ),
+                          ),
+                        )
+                        .toList(),
                     onChanged: (value) {
                       setState(() {
                         _selectedTemplateId = value;
@@ -713,6 +733,10 @@ class _ExercisesTabState extends State<_ExercisesTab> {
           return const Center(child: Text('No exercises yet. Create one to start logging.'));
         }
 
+        final exerciseOptions = vm.exercises
+            .map((exercise) => _DropdownOption(value: exercise.id, label: exercise.name))
+            .toList();
+
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -722,16 +746,31 @@ class _ExercisesTabState extends State<_ExercisesTab> {
                   fit: FlexFit.tight,
                   child: DropdownButtonFormField<int>(
                     value: vm.selectedExerciseId,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Exercise',
                       border: OutlineInputBorder(),
                       isDense: true,
                     ),
-                    items: vm.exercises
+                    items: exerciseOptions
                         .map(
-                          (exercise) => DropdownMenuItem<int>(
-                            value: exercise.id,
-                            child: Text(exercise.name),
+                          (option) => DropdownMenuItem<int>(
+                            value: option.value,
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(option.label),
+                          ),
+                        )
+                        .toList(),
+                    selectedItemBuilder: (context) => exerciseOptions
+                        .map(
+                          (option) => Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text(
+                              option.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                            ),
                           ),
                         )
                         .toList(),
@@ -832,6 +871,13 @@ class _ExercisesTabState extends State<_ExercisesTab> {
 /* -------------------------------------------------------------------------- */
 /*                           SHARED HELPER WIDGETS                            */
 /* -------------------------------------------------------------------------- */
+
+class _DropdownOption {
+  const _DropdownOption({required this.value, required this.label});
+
+  final int value;
+  final String label;
+}
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({
