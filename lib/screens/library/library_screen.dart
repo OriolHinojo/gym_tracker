@@ -5,6 +5,7 @@ import 'package:gym_tracker/screens/log/log_screen.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/shared/progress_calculator.dart';
 import 'package:gym_tracker/shared/progress_types.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 import 'package:gym_tracker/widgets/progress_filters.dart';
@@ -672,34 +673,41 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                 onRangeChanged: (r) => _reload(range: r),
               ),
               const SizedBox(height: 12),
-              Card(
-                child: SizedBox(
-                  height: 260,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 24, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Weight Trend',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        Text(
-                          _mode == ProgressAggMode.avgPerSession
-                              ? 'Average weight per session'
-                              : 'Set order: ${_mode.label}',
-                          style: Theme.of(context).textTheme.bodySmall,
+              ValueListenableBuilder<WeightUnit>(
+                valueListenable: LocalStore.instance.weightUnitListenable,
+                builder: (context, unit, _) => Column(
+                  children: [
+                    Card(
+                      child: SizedBox(
+                        height: 260,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 24, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Weight Trend',
+                                  style: Theme.of(context).textTheme.titleMedium),
+                              Text(
+                                _mode == ProgressAggMode.avgPerSession
+                                    ? 'Average weight per session'
+                                    : 'Set order: ${_mode.label}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                              const SizedBox(height: 12),
+                              Flexible(
+                                fit: FlexFit.tight,
+                                child: ProgressLineChart(points: vm.series, weightUnit: unit),
+                              ),
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        Flexible(
-                          fit: FlexFit.tight,
-                          child: ProgressLineChart(points: vm.series),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    ProgressPointsRecap(points: vm.series, weightUnit: unit),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              ProgressPointsRecap(points: vm.series),
             ],
           ),
         );

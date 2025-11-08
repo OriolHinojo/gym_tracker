@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -23,6 +24,10 @@ class LocalStore {
   // Notifier: emits whenever preferred_exercise_id changes (Home listens to this).
   final ValueNotifier<int?> _preferredExerciseId = ValueNotifier<int?>(null);
   ValueListenable<int?> get preferredExerciseIdListenable => _preferredExerciseId;
+
+  // Notifier: emits on weight unit preference changes.
+  final ValueNotifier<WeightUnit> _weightUnit = ValueNotifier<WeightUnit>(WeightUnit.kilograms);
+  ValueListenable<WeightUnit> get weightUnitListenable => _weightUnit;
 
   /// Initializes the local database file and loads it into memory.
   Future<void> init() async {
@@ -50,7 +55,10 @@ class LocalStore {
             final parsed = (json.decode(text) as Map).cast<String, dynamic>();
             _db = parsed;
             _db.putIfAbsent('version', () => 1);
-            _db.putIfAbsent('settings', () => {'preferred_exercise_id': null});
+            _db.putIfAbsent('settings', () => {
+                  'preferred_exercise_id': null,
+                  'weight_unit': 'kg',
+                });
             _db.putIfAbsent('workout_templates', () => <Map<String, dynamic>>[]);
           }
         } catch (_) {
@@ -64,13 +72,27 @@ class LocalStore {
     }
 
     final didEnhanceTemplates = _ensureTemplateMetadata();
-    if (didEnhanceTemplates) {
-      await _save();
-    }
 
     final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    bool settingsUpdated = false;
+    if (!settings.containsKey('preferred_exercise_id')) {
+      settings['preferred_exercise_id'] = null;
+      settingsUpdated = true;
+    }
+    final rawUnit = settings['weight_unit'];
+    if (rawUnit is! String || rawUnit.isEmpty) {
+      settings['weight_unit'] = 'kg';
+      settingsUpdated = true;
+    }
+    _db['settings'] = settings;
+
     final pref = settings['preferred_exercise_id'];
     _preferredExerciseId.value = pref == null ? null : (pref as num).toInt();
+    _weightUnit.value = WeightUnitX.fromStorage(settings['weight_unit']?.toString());
+
+    if (didEnhanceTemplates || settingsUpdated) {
+      await _save();
+    }
 
       _initComp!.complete();
     } catch (e, st) {
@@ -171,6 +193,7 @@ class LocalStore {
     _db = {};
     _initComp = null;
     _preferredExerciseId.value = null;
+    _weightUnit.value = WeightUnit.kilograms;
     _overrideAppDir = null;
     if (deleteFile && file != null) {
       try {
@@ -314,6 +337,7 @@ class LocalStore {
       'version': 2,
       'settings': {
         'preferred_exercise_id': null,
+        'weight_unit': 'kg',
       },
       'users': [user],
       'exercises': exercises,
@@ -548,6 +572,29 @@ class LocalStore {
     _db['settings'] = settings;
     await _save();
     _preferredExerciseId.value = exerciseId;
+  }
+
+  /// Returns the preferred display unit for weights.
+  Future<WeightUnit> getWeightUnit() async {
+    await init();
+    final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    final unit = WeightUnitX.fromStorage(settings['weight_unit']?.toString());
+    _weightUnit.value = unit;
+    return unit;
+  }
+
+  /// Persists and broadcasts the preferred display unit for weights.
+  Future<void> setWeightUnit(WeightUnit unit) async {
+    await init();
+    final settings = Map<String, dynamic>.from(_db['settings'] ?? const {});
+    final current = WeightUnitX.fromStorage(settings['weight_unit']?.toString());
+    if (current == unit && _weightUnit.value == unit) {
+      return;
+    }
+    settings['weight_unit'] = unit.storageKey;
+    _db['settings'] = settings;
+    await _save();
+    _weightUnit.value = unit;
   }
 
   // ----- Workout templates -----

@@ -48,7 +48,7 @@ Reusable UI building blocks—dialogs, charts, recap cards, and session componen
 - **Session preview**: `SessionPreviewSheet` expects a `Future<SessionDetail>`; handle errors upstream or rely on built-in error text. Provide `SessionPreviewAction` only when the detail represents a real session (id > 0) to show the shared edit button.
 - `ProgressLineChart` assumes non-empty point lists for axis scaling; guard at caller when data absent.
 - Dialog returns `null` on cancel—check before using the result.
-- Widgets assume metric units (kg); update copy if supporting lb.
+- Displayed weights follow the persisted units preference (kg/lb) exposed via `LocalStore.weightUnitListenable`.
 
 **Quick Start**
 - For dev work here: import target widget into a story/sandbox screen and feed mock data.

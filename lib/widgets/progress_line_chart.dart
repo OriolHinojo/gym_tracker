@@ -3,15 +3,17 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../shared/progress_types.dart';
+import '../shared/weight_units.dart';
 
 /// Simple line chart used to visualise progress data.
 ///
 /// The painter is kept intentionally lightweight so it can be reused anywhere
 /// a small sparkline-style chart is needed.
 class ProgressLineChart extends StatelessWidget {
-  const ProgressLineChart({super.key, required this.points});
+  const ProgressLineChart({super.key, required this.points, required this.weightUnit});
 
   final List<ProgressPoint> points;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +24,7 @@ class ProgressLineChart extends StatelessWidget {
         colorScheme: theme.colorScheme,
         textColor: theme.colorScheme.onSurface,
         subtleTextColor: theme.colorScheme.onSurfaceVariant,
+        weightUnit: weightUnit,
       ),
       child: const SizedBox.expand(),
     );
@@ -34,12 +37,14 @@ class _ProgressLineChartPainter extends CustomPainter {
     required this.colorScheme,
     required this.textColor,
     required this.subtleTextColor,
+    required this.weightUnit,
   });
 
   final List<ProgressPoint> points;
   final ColorScheme colorScheme;
   final Color textColor;
   final Color subtleTextColor;
+  final WeightUnit weightUnit;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -68,8 +73,11 @@ class _ProgressLineChartPainter extends CustomPainter {
 
     if (points.isEmpty) return;
 
-    double minY = points.map((p) => p.yWeight).reduce((a, b) => a < b ? a : b);
-    double maxY = points.map((p) => p.yWeight).reduce((a, b) => a > b ? a : b);
+    final convertedWeights = points
+        .map((p) => weightUnit.fromKilograms(p.yWeight))
+        .toList(growable: false);
+    double minY = convertedWeights.reduce((a, b) => a < b ? a : b);
+    double maxY = convertedWeights.reduce((a, b) => a > b ? a : b);
     if (minY == maxY) {
       minY -= 1;
       maxY += 1;
@@ -124,8 +132,9 @@ class _ProgressLineChartPainter extends CustomPainter {
     final path = Path();
     for (int i = 0; i < points.length; i++) {
       final point = points[i];
+      final weight = convertedWeights[i];
       final x = xPositions[i];
-      final y = yFor(point.yWeight);
+      final y = yFor(weight);
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -136,13 +145,14 @@ class _ProgressLineChartPainter extends CustomPainter {
 
     for (int i = 0; i < points.length; i++) {
       final point = points[i];
+      final weight = convertedWeights[i];
       final x = xPositions[i];
-      final y = yFor(point.yWeight);
+      final y = yFor(weight);
       canvas.drawCircle(Offset(x, y), 3.5, paintDot);
 
       final weightStyle = baseTextStyle.copyWith(fontWeight: FontWeight.w600);
       final weightText = TextPainter(
-        text: TextSpan(text: point.yWeight.toStringAsFixed(0), style: weightStyle),
+        text: TextSpan(text: formatSetWeight(point.yWeight, weightUnit), style: weightStyle),
         textDirection: TextDirection.ltr,
       )..layout();
       weightText.paint(canvas, Offset(x - weightText.width / 2, y - 18));
@@ -175,7 +185,10 @@ class _ProgressLineChartPainter extends CustomPainter {
     for (final tick in ticks) {
       final y = yFor(tick);
       final label = TextPainter(
-        text: TextSpan(text: tick.toStringAsFixed(0), style: baseTextStyle),
+        text: TextSpan(
+          text: formatSetWeight(weightUnit.toKilograms(tick), weightUnit),
+          style: baseTextStyle,
+        ),
         textDirection: TextDirection.ltr,
       )..layout();
       label.paint(canvas, Offset(leftPad - label.width - 6, y - label.height / 2));
@@ -192,7 +205,8 @@ class _ProgressLineChartPainter extends CustomPainter {
       oldDelegate.points != points ||
       oldDelegate.colorScheme != colorScheme ||
       oldDelegate.textColor != textColor ||
-      oldDelegate.subtleTextColor != subtleTextColor;
+      oldDelegate.subtleTextColor != subtleTextColor ||
+      oldDelegate.weightUnit != weightUnit;
 }
 
 DateTime _weekStart(DateTime date) {

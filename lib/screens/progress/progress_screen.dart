@@ -7,6 +7,7 @@ import 'package:gym_tracker/services/analytics/analytics_service.dart';
 import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/progress_calculator.dart';
 import 'package:gym_tracker/shared/progress_types.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
 import 'package:gym_tracker/widgets/progress_filters.dart';
 import 'package:gym_tracker/widgets/progress_line_chart.dart';
@@ -26,23 +27,26 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Progress'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Templates'),
-              Tab(text: 'Exercises'),
+    return ValueListenableBuilder<WeightUnit>(
+      valueListenable: LocalStore.instance.weightUnitListenable,
+      builder: (context, unit, _) => DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Progress'),
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: 'Templates'),
+                Tab(text: 'Exercises'),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              _TemplatesTab(analytics: _analytics, weightUnit: unit),
+              _ExercisesTab(analytics: _analytics, calculator: _calculator, weightUnit: unit),
             ],
           ),
-        ),
-        body: TabBarView(
-          children: [
-            _TemplatesTab(analytics: _analytics),
-            _ExercisesTab(analytics: _analytics, calculator: _calculator),
-          ],
         ),
       ),
     );
@@ -54,9 +58,10 @@ class _ProgressScreenState extends State<ProgressScreen> with TickerProviderStat
 /* -------------------------------------------------------------------------- */
 
 class _TemplatesTab extends StatefulWidget {
-  const _TemplatesTab({required this.analytics});
+  const _TemplatesTab({required this.analytics, required this.weightUnit});
 
   final AnalyticsService analytics;
+  final WeightUnit weightUnit;
 
   @override
   State<_TemplatesTab> createState() => _TemplatesTabState();
@@ -375,6 +380,7 @@ class _TemplatesTabState extends State<_TemplatesTab> {
               snapshot: vm.analytics,
               contextLabel: contextLabel,
               lastSessionWeight: vm.sessions.isEmpty ? null : vm.sessions.first.volume,
+              weightUnit: widget.weightUnit,
             ),
             const SizedBox(height: 12),
             if (vm.analytics.volumeTrend.isNotEmpty) ...[
@@ -384,11 +390,17 @@ class _TemplatesTabState extends State<_TemplatesTab> {
             if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
               _SectionHeader(title: 'Volume insights'),
               const SizedBox(height: 8),
-              _TimeOfDayCard(entries: vm.analytics.volumeByTimeOfDay),
+              _TimeOfDayCard(
+                entries: vm.analytics.volumeByTimeOfDay,
+                weightUnit: widget.weightUnit,
+              ),
               const SizedBox(height: 12),
             ],
             if (vm.analytics.personalRecords.isNotEmpty) ...[
-              _PrCard(records: vm.analytics.personalRecords),
+              _PrCard(
+                records: vm.analytics.personalRecords,
+                weightUnit: widget.weightUnit,
+              ),
               const SizedBox(height: 12),
             ],
             _SectionHeader(title: 'Recent sessions'),
@@ -414,7 +426,7 @@ class _TemplatesTabState extends State<_TemplatesTab> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(_formatWeight(session.volume)),
+                      Text(_formatWeight(session.volume, widget.weightUnit)),
                       Text('${session.setCount} sets', style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
@@ -440,10 +452,15 @@ class _TemplatesTabState extends State<_TemplatesTab> {
 /* -------------------------------------------------------------------------- */
 
 class _ExercisesTab extends StatefulWidget {
-  const _ExercisesTab({required this.analytics, required this.calculator});
+  const _ExercisesTab({
+    required this.analytics,
+    required this.calculator,
+    required this.weightUnit,
+  });
 
   final AnalyticsService analytics;
   final ProgressCalculator calculator;
+  final WeightUnit weightUnit;
 
   @override
   State<_ExercisesTab> createState() => _ExercisesTabState();
@@ -772,6 +789,7 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               snapshot: vm.analytics,
               contextLabel: vm.selectedExerciseName,
               lastSessionWeight: vm.lastSessionWeight,
+              weightUnit: widget.weightUnit,
             ),
             const SizedBox(height: 12),
             _ChartCard(
@@ -779,6 +797,7 @@ class _ExercisesTabState extends State<_ExercisesTab> {
               subtitle:
                   vm.mode == ProgressAggMode.avgPerSession ? 'Average weight per session' : 'Set order: ${vm.mode.label}',
               points: vm.series,
+              weightUnit: widget.weightUnit,
             ),
             const SizedBox(height: 16),
             ProgressFilters(
@@ -789,14 +808,20 @@ class _ExercisesTabState extends State<_ExercisesTab> {
             ),
             const SizedBox(height: 16),
             if (vm.analytics.volumeByTimeOfDay.isNotEmpty) ...[
-              _TimeOfDayCard(entries: vm.analytics.volumeByTimeOfDay),
+              _TimeOfDayCard(
+                entries: vm.analytics.volumeByTimeOfDay,
+                weightUnit: widget.weightUnit,
+              ),
               const SizedBox(height: 12),
             ],
             if (vm.analytics.personalRecords.isNotEmpty) ...[
-              _PrCard(records: vm.analytics.personalRecords),
+              _PrCard(
+                records: vm.analytics.personalRecords,
+                weightUnit: widget.weightUnit,
+              ),
               const SizedBox(height: 12),
             ],
-            ProgressPointsRecap(points: vm.series),
+            ProgressPointsRecap(points: vm.series, weightUnit: widget.weightUnit),
           ],
         );
       },
@@ -813,11 +838,13 @@ class _SummaryCard extends StatelessWidget {
     required this.snapshot,
     required this.contextLabel,
     required this.lastSessionWeight,
+    required this.weightUnit,
   });
 
   final AnalyticsSnapshot snapshot;
   final String contextLabel;
   final double? lastSessionWeight;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -839,11 +866,13 @@ class _SummaryCard extends StatelessWidget {
                 _MetricTile(label: 'Sessions', value: snapshot.sessionCount.toString()),
                 _MetricTile(
                   label: 'Avg / session',
-                  value: snapshot.sessionCount == 0 ? '—' : _formatWeight(snapshot.averageVolumePerSession),
+                  value: snapshot.sessionCount == 0
+                      ? '—'
+                      : _formatWeight(snapshot.averageVolumePerSession, weightUnit),
                 ),
                 _MetricTile(
                   label: 'Last session',
-                  value: lastSessionWeight == null ? '—' : _formatWeight(lastSessionWeight!),
+                  value: lastSessionWeight == null ? '—' : _formatWeight(lastSessionWeight!, weightUnit),
                 ),
               ],
             ),
@@ -939,9 +968,10 @@ class _VolumeMiniChart extends StatelessWidget {
 }
 
 class _TimeOfDayCard extends StatelessWidget {
-  const _TimeOfDayCard({required this.entries});
+  const _TimeOfDayCard({required this.entries, required this.weightUnit});
 
   final List<TimeOfDayVolume> entries;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -989,6 +1019,7 @@ class _TimeOfDayCard extends StatelessWidget {
                         primaryColor: averageColor,
                         secondaryColor: lastColor,
                         textTheme: theme.textTheme,
+                        weightUnit: weightUnit,
                       ),
                     ],
                   );
@@ -1009,6 +1040,7 @@ class _TimeOfDayBarChart extends StatelessWidget {
     required this.primaryColor,
     required this.secondaryColor,
     required this.textTheme,
+    required this.weightUnit,
   });
 
   final List<TimeOfDayVolume> entries;
@@ -1016,6 +1048,7 @@ class _TimeOfDayBarChart extends StatelessWidget {
   final Color primaryColor;
   final Color secondaryColor;
   final TextTheme textTheme;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -1027,7 +1060,12 @@ class _TimeOfDayBarChart extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          _YAxis(ticks: ticks, chartHeight: chartHeight, textTheme: textTheme),
+          _YAxis(
+            ticks: ticks,
+            chartHeight: chartHeight,
+            textTheme: textTheme,
+            weightUnit: weightUnit,
+          ),
           const SizedBox(width: 16),
           Flexible(
             fit: FlexFit.tight,
@@ -1178,11 +1216,13 @@ class _YAxis extends StatelessWidget {
     required this.ticks,
     required this.chartHeight,
     required this.textTheme,
+    required this.weightUnit,
   });
 
   final List<double> ticks;
   final double chartHeight;
   final TextTheme textTheme;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -1194,7 +1234,7 @@ class _YAxis extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: ticks.map((tick) {
-          final label = tick == 0 ? '0' : _formatWeight(tick);
+          final label = tick == 0 ? '0' : _formatWeight(tick, weightUnit);
           return Text(label, style: textTheme.bodySmall);
         }).toList(),
       ),
@@ -1203,9 +1243,10 @@ class _YAxis extends StatelessWidget {
 }
 
 class _PrCard extends StatelessWidget {
-  const _PrCard({required this.records});
+  const _PrCard({required this.records, required this.weightUnit});
 
   final List<PersonalRecord> records;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -1224,7 +1265,7 @@ class _PrCard extends StatelessWidget {
                 leading: const Icon(Icons.emoji_events_outlined),
                 title: Text(record.exerciseName),
                 subtitle: Text(
-                  '${_formatWeight(record.weight)} · ${record.reps} reps · 1RM ${record.estimatedOneRm.toStringAsFixed(1)}',
+                  '${_formatWeight(record.weight, weightUnit)} · ${record.reps} reps · 1RM ${_formatWeight(record.estimatedOneRm, weightUnit)}',
                 ),
                 trailing: Text(formatDateYmd(record.achievedAt)),
               ),
@@ -1255,11 +1296,13 @@ class _ChartCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.points,
+    required this.weightUnit,
   });
 
   final String title;
   final String subtitle;
   final List<ProgressPoint> points;
+  final WeightUnit weightUnit;
 
   @override
   Widget build(BuildContext context) {
@@ -1278,7 +1321,7 @@ class _ChartCard extends StatelessWidget {
               const SizedBox(height: 12),
               Flexible(
                 fit: FlexFit.tight,
-                child: ProgressLineChart(points: points),
+                child: ProgressLineChart(points: points, weightUnit: weightUnit),
               ),
             ],
           ),
@@ -1372,8 +1415,4 @@ String _normalizeName(String raw) {
   return trimmed;
 }
 
-String _formatWeight(double kilos) {
-  if (kilos >= 1000) return '${(kilos / 1000).toStringAsFixed(1)}k kg';
-  if (kilos >= 100) return '${kilos.toStringAsFixed(0)} kg';
-  return '${kilos.toStringAsFixed(1)} kg';
-}
+String _formatWeight(double kilos, WeightUnit unit) => formatCompactWeight(kilos, unit);

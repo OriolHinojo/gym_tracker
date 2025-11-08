@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/home/home_calendar_sheet.dart';
 import 'package:gym_tracker/shared/formatting.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 import 'package:gym_tracker/theme/theme.dart' show BrandColors;
 import 'package:gym_tracker/widgets/session_preview_sheet.dart';
@@ -47,26 +48,32 @@ class HomeScreen extends StatelessWidget {
           ValueListenableBuilder<int?>(
             valueListenable: LocalStore.instance.preferredExerciseIdListenable,
             builder: (context, favId, _) {
-              return FutureBuilder<HomeStats>(
-                future: LocalStore.instance.getHomeStats(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      height: 120,
-                      child: Center(child: CircularProgressIndicator()),
-                    );
-                  }
-                  if (snap.hasError) {
-                    return const SizedBox(
-                      height: 120,
-                      child: Center(child: Text('Failed to load stats')),
-                    );
-                  }
-                  final stats = snap.data ?? const HomeStats(0, 0.0, '—', null, '—');
-                  final items = stats.toItems(
-                    onTapWeekly: (ctx) => showHomeCalendarSheet(ctx),
+              return ValueListenableBuilder<WeightUnit>(
+                valueListenable: LocalStore.instance.weightUnitListenable,
+                builder: (context, unit, __) {
+                  return FutureBuilder<HomeStats>(
+                    future: LocalStore.instance.getHomeStats(),
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const SizedBox(
+                          height: 120,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      if (snap.hasError) {
+                        return const SizedBox(
+                          height: 120,
+                          child: Center(child: Text('Failed to load stats')),
+                        );
+                      }
+                      final stats = snap.data ?? const HomeStats(0, 0.0, '—', null, '—');
+                      final items = stats.toItems(
+                        unit: unit,
+                        onTapWeekly: (ctx) => showHomeCalendarSheet(ctx),
+                      );
+                      return _SummaryGrid(items: items);
+                    },
                   );
-                  return _SummaryGrid(items: items);
                 },
               );
             },
@@ -110,7 +117,11 @@ extension on HomeStats {
     return '/sessions/$id';
   }
 
-  List<_StatItem> toItems({void Function(BuildContext context)? onTapWeekly}) => [
+  List<_StatItem> toItems({
+    void Function(BuildContext context)? onTapWeekly,
+    required WeightUnit unit,
+  }) =>
+      [
         _StatItem(
           'This Week',
           weeklySessions.toString(),
@@ -121,8 +132,8 @@ extension on HomeStats {
         ),
         _StatItem(
           'Trend — $favouriteExercise',
-          '${e1rmDelta >= 0 ? '+' : ''}$e1rmDelta',
-          'kg e1RM',
+          formatWeightDelta(e1rmDelta, unit),
+          '${unit.label} e1RM',
           Icons.show_chart_rounded,
           '/progress',
           positive: e1rmDelta >= 0,
@@ -443,11 +454,18 @@ class _Highlights extends StatelessWidget {
                   subtitle: Text('Great job! Keep the momentum.'),
                 ),
                 Divider(color: scheme.outlineVariant.withOpacity(0.25)),
-                const ListTile(
-                  dense: true,
-                  leading: Icon(Icons.trending_up_rounded),
-                  title: Text('e1RM +2.5 kg on Squat'),
-                  subtitle: Text('Progress trending up this week.'),
+                ValueListenableBuilder<WeightUnit>(
+                  valueListenable: LocalStore.instance.weightUnitListenable,
+                  builder: (context, unit, _) {
+                    final delta = unit.fromKilograms(2.5);
+                    final formatted = delta >= 10 ? delta.toStringAsFixed(0) : delta.toStringAsFixed(1);
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.trending_up_rounded),
+                      title: Text('e1RM +$formatted ${unit.label} on Squat'),
+                      subtitle: const Text('Progress trending up this week.'),
+                    );
+                  },
                 ),
               ],
             ),

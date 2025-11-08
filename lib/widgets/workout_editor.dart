@@ -7,6 +7,7 @@ import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:gym_tracker/widgets/create_exercise_dialog.dart';
 
 typedef WorkoutEditorSaveCallback = FutureOr<void> Function(
@@ -101,6 +102,9 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
   String _editingWorkoutName = 'Workout';
   DateTime? _editingStartedAt;
   int? _activeTemplateId;
+  late WeightUnit _weightUnit;
+  late final ValueListenable<WeightUnit> _weightUnitListenable;
+  VoidCallback? _weightUnitListener;
 
   @override
   void initState() {
@@ -109,6 +113,13 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
       if (mounted) setState(() => _elapsed = elapsed);
     })
       ..start();
+    _weightUnitListenable = LocalStore.instance.weightUnitListenable;
+    _weightUnit = _weightUnitListenable.value;
+    _weightUnitListener = () {
+      if (!mounted) return;
+      _handleWeightUnitChanged(_weightUnitListenable.value);
+    };
+    _weightUnitListenable.addListener(_weightUnitListener!);
 
     _initializeFromRoute();
   }
@@ -122,6 +133,62 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
     if (editId != null) {
       await _loadWorkoutFromId(editId, markChoice: true, enableEditing: true);
     }
+  }
+
+  void _handleWeightUnitChanged(WeightUnit newUnit) {
+    final oldUnit = _weightUnit;
+    if (oldUnit == newUnit) {
+      setState(() {
+        _weightUnit = newUnit;
+      });
+      return;
+    }
+
+    String? convert(String? value) {
+      if (value == null) return null;
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return value;
+      final parsed = double.tryParse(trimmed);
+      if (parsed == null) return value;
+      final kilos = oldUnit.toKilograms(parsed);
+      final converted = newUnit.fromKilograms(kilos);
+      return _formatNumber(converted);
+    }
+
+    for (final exercise in _exercises) {
+      for (final set in exercise.sets) {
+        final text = set.weight.text.trim();
+        if (text.isNotEmpty) {
+          final converted = convert(text);
+          if (converted != null) {
+            set.weight.text = converted;
+          }
+        }
+        if (set.weightHint != null) {
+          final convertedHint = convert(set.weightHint);
+          if (convertedHint != null) {
+            set.weightHint = convertedHint;
+          }
+        }
+      }
+
+      for (var i = 0; i < exercise._history.length; i++) {
+        final entry = exercise._history[i];
+        final convertedHint = convert(entry.weightHint);
+        final updated = _SetHistoryEntry(
+          ordinal: entry.ordinal,
+          weightHint: convertedHint ?? entry.weightHint,
+          repsHint: entry.repsHint,
+          tag: entry.tag,
+        );
+        exercise._history[i] = updated;
+        exercise._historyByOrdinal[entry.ordinal] = updated;
+      }
+    }
+
+    setState(() {
+      _weightUnit = newUnit;
+    });
   }
 
   Future<void> _applyTemplate(int templateId) async {
@@ -364,6 +431,10 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
 
   @override
   void dispose() {
+    final listener = _weightUnitListener;
+    if (listener != null) {
+      _weightUnitListenable.removeListener(listener);
+    }
     _disposeExercises();
     _ticker.dispose();
     super.dispose();
@@ -587,7 +658,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
       final weightVal = set['weight'] as num?;
       final repsVal = set['reps'] as num?;
       if (weightVal == null || repsVal == null) continue;
-      final weightStr = _formatNumber(weightVal);
+      final weightStr = _formatNumber(_weightUnit.fromKilograms(weightVal.toDouble()));
       final repsStr = _formatNumber(repsVal);
       final ordinal = (set['ordinal'] as num?)?.toInt();
       final effectiveOrdinal =
@@ -959,7 +1030,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                                             textInputAction: TextInputAction.next,
                                             onSubmitted: (_) => _focusRepsField(ex, s),
                                             decoration: InputDecoration(
-                                              labelText: 'Weight',
+                                              labelText: 'Weight (${_weightUnit.label})',
                                               hintText: s.weightHint,
                                               floatingLabelBehavior: FloatingLabelBehavior.always,
                                             ),
@@ -1346,9 +1417,10 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
     for (final ex in _exercises) {
       int ord = 1;
       for (final s in ex.sets) {
-        final weight = double.tryParse(s.weight.text.trim());
+        final weightDisplay = double.tryParse(s.weight.text.trim());
         final reps = int.tryParse(s.reps.text.trim());
-        if (weight == null || reps == null || weight <= 0 || reps <= 0) continue;
+        if (weightDisplay == null || reps == null || weightDisplay <= 0 || reps <= 0) continue;
+        final weight = _weightUnit.toKilograms(weightDisplay);
         final createdAt = s.originalTimestamp ??
             (_editingWorkoutId != null ? (_editingStartedAt ?? nowUtc) : nowUtc);
         sets.add({
@@ -1569,7 +1641,7 @@ class _SetDraft {
   _SetDraft({
     String? weight,
     String? reps,
-    this.weightHint,
+    String? weightHint,
     this.repsHint,
     this.done = false,
     this.originalTimestamp,
@@ -1581,13 +1653,14 @@ class _SetDraft {
     if (reps != null && reps.isNotEmpty) {
       this.reps.text = reps;
     }
+    this.weightHint = weightHint;
   }
 
   final TextEditingController weight = TextEditingController();
   final TextEditingController reps = TextEditingController();
   final FocusNode weightFocus = FocusNode();
   final FocusNode repsFocus = FocusNode();
-  final String? weightHint;
+  String? weightHint;
   final String? repsHint;
   bool done;
   final DateTime? originalTimestamp;

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:gym_tracker/data/local/local_store.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:gym_tracker/theme/theme_switcher.dart';
 
 class MoreScreen extends StatelessWidget {
@@ -10,11 +12,20 @@ class MoreScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('More'), actions: const [ThemeSwitcher()]),
       body: ListView(
         children: <Widget>[
-          SwitchListTile(
-            title: const Text('Units: Use kg'),
-            value: true,
-            onChanged: (v) {},
-            subtitle: const Text('Toggle between kg/lb (UI only)'),
+          ValueListenableBuilder<WeightUnit>(
+            valueListenable: LocalStore.instance.weightUnitListenable,
+            builder: (context, unit, _) {
+              final useKg = unit == WeightUnit.kilograms;
+              return SwitchListTile(
+                title: Text('Units: ${unit.displayName}'),
+                value: useKg,
+                onChanged: (value) {
+                  final targetUnit = value ? WeightUnit.kilograms : WeightUnit.pounds;
+                  LocalStore.instance.setWeightUnit(targetUnit);
+                },
+                subtitle: const Text('Toggle between kg/lb'),
+              );
+            },
           ),
           ListTile(
             title: const Text('e1RM Formula'),

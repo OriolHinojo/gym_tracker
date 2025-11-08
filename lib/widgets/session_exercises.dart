@@ -1,6 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
+import 'package:gym_tracker/shared/weight_units.dart';
 
 /// Renders a list of session exercises, each expandable to reveal sets.
 class SessionExercisesList extends StatelessWidget {
@@ -58,11 +61,23 @@ class SessionExerciseCard extends StatefulWidget {
 class _SessionExerciseCardState extends State<SessionExerciseCard>
     with SingleTickerProviderStateMixin {
   late bool _expanded;
+  late WeightUnit _weightUnit;
+  late final ValueListenable<WeightUnit> _weightUnitListenable;
+  VoidCallback? _weightUnitListener;
 
   @override
   void initState() {
     super.initState();
     _expanded = widget.initiallyExpanded;
+    _weightUnitListenable = LocalStore.instance.weightUnitListenable;
+    _weightUnit = _weightUnitListenable.value;
+    _weightUnitListener = () {
+      if (!mounted) return;
+      setState(() {
+        _weightUnit = _weightUnitListenable.value;
+      });
+    };
+    _weightUnitListenable.addListener(_weightUnitListener!);
   }
 
   @override
@@ -73,17 +88,27 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
     }
   }
 
+  @override
+  void dispose() {
+    final listener = _weightUnitListener;
+    if (listener != null) {
+      _weightUnitListenable.removeListener(listener);
+    }
+    super.dispose();
+  }
+
   void _toggle() {
     setState(() {
       _expanded = !_expanded;
     });
   }
 
-  String _formatWeight(double value) {
-    if (value == value.roundToDouble()) {
-      return value.toInt().toString();
+  String _formatWeight(double kilos) {
+    final converted = _weightUnit.fromKilograms(kilos);
+    if (converted == converted.roundToDouble()) {
+      return converted.toInt().toString();
     }
-    return value.toStringAsFixed(1);
+    return converted.toStringAsFixed(1);
   }
 
   SessionSet? get _heaviestSet {
@@ -145,7 +170,7 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
               if (heaviest != null) ...[
                 const SizedBox(height: 2),
                 Text(
-                  'Top set: ${_formatWeight(heaviest.weight)} kg x ${heaviest.reps}',
+                  'Top set: ${_formatWeight(heaviest.weight)} ${_weightUnit.label} x ${heaviest.reps}',
                   style: summaryStyle,
                 ),
               ],
@@ -188,7 +213,7 @@ class _SessionExerciseCardState extends State<SessionExerciseCard>
                                       ),
                                     ),
                                     title: Text(
-                                      '${_formatWeight(sets[i].weight)} kg',
+                                      '${_formatWeight(sets[i].weight)} ${_weightUnit.label}',
                                       style: setValueStyle,
                                     ),
                                     subtitle: tagLabel == null
