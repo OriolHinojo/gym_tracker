@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
+import 'package:gym_tracker/screens/library/exercise_detail_screen.dart';
 import 'package:gym_tracker/shared/exercise_category_icons.dart';
 import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
@@ -645,6 +646,34 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
   }
 
   _SetDraftData _buildSetDraftsFromRaw(List<Map<String, dynamic>> rawSets, {required bool asPlaceholder}) {
+    final historyResult = _computeHistoryFromRaw(rawSets);
+    final historyEntries = historyResult.historyEntries;
+    final createdByOrdinal = historyResult.createdByOrdinal;
+
+    if (historyEntries.isEmpty) {
+      final fallbackDrafts =
+          asPlaceholder ? <_SetDraft>[_SetDraft(), _SetDraft()] : <_SetDraft>[_SetDraft()];
+      return _SetDraftData(drafts: fallbackDrafts, history: const <_SetHistoryEntry>[]);
+    }
+
+    final drafts = <_SetDraft>[];
+    for (final entry in historyEntries) {
+      final createdAt = createdByOrdinal[entry.ordinal];
+      drafts.add(_SetDraft(
+        weight: entry.weightHint,
+        reps: entry.repsHint,
+        weightHint: entry.weightHint,
+        repsHint: entry.repsHint,
+        done: !asPlaceholder,
+        originalTimestamp: asPlaceholder ? null : createdAt,
+        tag: setTagFromStorage(entry.tag),
+      ));
+    }
+
+    return _SetDraftData(drafts: drafts, history: historyEntries);
+  }
+
+  _HistoryComputationResult _computeHistoryFromRaw(List<Map<String, dynamic>> rawSets) {
     final sorted = List<Map<String, dynamic>>.from(rawSets)
       ..sort((a, b) {
         final ao = (a['ordinal'] as num?)?.toInt() ?? 0;
@@ -673,28 +702,11 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
           DateTime.tryParse((set['created_at'] ?? '').toString())?.toUtc();
     }
 
-    if (historyEntries.isEmpty) {
-      final fallbackDrafts =
-          asPlaceholder ? <_SetDraft>[_SetDraft(), _SetDraft()] : <_SetDraft>[_SetDraft()];
-      return _SetDraftData(drafts: fallbackDrafts, history: const <_SetHistoryEntry>[]);
-    }
-
     historyEntries.sort((a, b) => a.ordinal.compareTo(b.ordinal));
-    final drafts = <_SetDraft>[];
-    for (final entry in historyEntries) {
-      final createdAt = createdByOrdinal[entry.ordinal];
-      drafts.add(_SetDraft(
-        weight: entry.weightHint,
-        reps: entry.repsHint,
-        weightHint: entry.weightHint,
-        repsHint: entry.repsHint,
-        done: !asPlaceholder,
-        originalTimestamp: asPlaceholder ? null : createdAt,
-        tag: setTagFromStorage(entry.tag),
-      ));
-    }
-
-    return _SetDraftData(drafts: drafts, history: historyEntries);
+    return _HistoryComputationResult(
+      historyEntries: historyEntries,
+      createdByOrdinal: createdByOrdinal,
+    );
   }
 
   Widget _buildWorkoutBody(String time) {
@@ -791,6 +803,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
         child: Column(
           children: [
             ListTile(
+              onTap: () => _replaceExerciseFlow(ex),
               title: Text(ex.name),
               subtitle: Text(ex.category),
               trailing: Row(
@@ -798,12 +811,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                 children: [
                   IconButton(
                     tooltip: 'History',
-                    onPressed: () {
-                      context.pushNamed(
-                        'exerciseDetail',
-                        pathParameters: {'id': '${ex.id}'},
-                      );
-                    },
+                    onPressed: () => _openExerciseDetail(ex.id),
                     icon: const Icon(Icons.history),
                   ),
                   IconButton(
@@ -1223,11 +1231,16 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
     );
   }
 
-  Future<void> _addExerciseFlow() async {
+  Future<_ExerciseSelection?> _showExercisePickerSheet({
+    required String title,
+    required String primaryLabel,
+    int? initialSelectedId,
+  }) async {
     final all = await LocalStore.instance.listExercisesRaw();
-    int? selectedId;
+    int? selectedId = initialSelectedId;
     final TextEditingController searchController = TextEditingController();
     String searchQuery = '';
+    _ExerciseSelection? selection;
 
     await showModalBottomSheet(
       context: context,
@@ -1250,10 +1263,10 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 12),
-                    const Text(
-                      'Add Exercise',
+                    Text(
+                      title,
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
                     Padding(
@@ -1299,20 +1312,12 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                       onTap: () async {
                         final created = await showCreateExerciseDialog(context);
                         if (!mounted || created == null) return;
-                        late _ExerciseDraft newExercise;
-                        setState(() {
-                          newExercise = _ExerciseDraft(
-                            id: created.id,
-                            name: created.name,
-                            category: created.category,
-                          );
-                          _exercises.add(newExercise);
-                          _expandedExerciseId = created.id;
-                          _choiceMade = true;
-                        });
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          _focusFirstEmptyField(newExercise);
-                        });
+                        selection = _ExerciseSelection(
+                          id: created.id,
+                          name: created.name,
+                          category: created.category,
+                          wasCreated: true,
+                        );
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
                     ),
@@ -1328,40 +1333,19 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                           FilledButton(
                             onPressed: selectedId == null
                                 ? null
-                                : () async {
+                                : () {
                                     final id = selectedId!;
                                     final ex = all.firstWhere((e) => (e['id'] as num).toInt() == id);
                                     final name = (ex['name'] ?? 'Exercise').toString();
                                     final category = (ex['category'] ?? 'other').toString();
-                                    final history = await LocalStore.instance
-                                        .listLatestSetsForExerciseRaw(
-                                      id,
-                                      templateId: _activeTemplateId,
+                                    selection = _ExerciseSelection(
+                                      id: id,
+                                      name: name,
+                                      category: category,
                                     );
-                                    final setData = _buildSetDraftsFromRaw(
-                                      history,
-                                      asPlaceholder: true,
-                                    );
-                                    if (!mounted) return;
-                                    late _ExerciseDraft newExercise;
-                                    setState(() {
-                                      newExercise = _ExerciseDraft(
-                                        id: id,
-                                        name: name,
-                                        category: category,
-                                        sets: setData.drafts,
-                                        history: setData.history,
-                                      );
-                                      _exercises.add(newExercise);
-                                      _expandedExerciseId = id;
-                                      _choiceMade = true;
-                                    });
-                                    WidgetsBinding.instance.addPostFrameCallback(
-                                      (_) => _focusFirstEmptyField(newExercise),
-                                    );
-                                    if (context.mounted) Navigator.pop(ctx);
+                                    Navigator.pop(ctx);
                                   },
-                            child: const Text('Add'),
+                            child: Text(primaryLabel),
                           ),
                         ],
                       ),
@@ -1376,6 +1360,85 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
       ),
     );
     searchController.dispose();
+    return selection;
+  }
+
+  Future<void> _addExerciseFlow() async {
+    final selection = await _showExercisePickerSheet(
+      title: 'Add Exercise',
+      primaryLabel: 'Add',
+    );
+    if (!mounted || selection == null) return;
+
+    List<Map<String, dynamic>> historyRaw = const <Map<String, dynamic>>[];
+    if (!selection.wasCreated) {
+      historyRaw = await LocalStore.instance.listLatestSetsForExerciseRaw(
+        selection.id,
+        templateId: _activeTemplateId,
+      );
+    }
+
+    if (!mounted) return;
+    final setData = _buildSetDraftsFromRaw(historyRaw, asPlaceholder: true);
+    late _ExerciseDraft newExercise;
+    setState(() {
+      newExercise = _ExerciseDraft(
+        id: selection.id,
+        name: selection.name,
+        category: selection.category,
+        sets: setData.drafts,
+        history: setData.history,
+      );
+      _exercises.add(newExercise);
+      _expandedExerciseId = selection.id;
+      _choiceMade = true;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _focusFirstEmptyField(newExercise));
+  }
+
+  Future<void> _replaceExerciseFlow(_ExerciseDraft exercise) async {
+    final selection = await _showExercisePickerSheet(
+      title: 'Replace Exercise',
+      primaryLabel: 'Replace',
+      initialSelectedId: exercise.id,
+    );
+    if (!mounted || selection == null) return;
+
+    List<_SetHistoryEntry> historyEntries = <_SetHistoryEntry>[];
+    if (!selection.wasCreated) {
+      final rawHistory = await LocalStore.instance.listLatestSetsForExerciseRaw(
+        selection.id,
+        templateId: _activeTemplateId,
+      );
+      historyEntries = _computeHistoryFromRaw(rawHistory).historyEntries;
+    }
+
+    if (!mounted) return;
+    final previousId = exercise.id;
+    setState(() {
+      exercise.updateDetails(
+        id: selection.id,
+        name: selection.name,
+        category: selection.category,
+        history: historyEntries,
+      );
+      if (_expandedExerciseId == previousId) {
+        _expandedExerciseId = exercise.id;
+      }
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Exercise changed to "${selection.name}"')));
+  }
+
+  Future<void> _openExerciseDetail(int exerciseId) async {
+    if (!mounted) return;
+    await Navigator.of(context, rootNavigator: true).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ExerciseDetailScreen(id: exerciseId),
+      ),
+    );
   }
 
   Future<void> _saveAsTemplateFlow() async {
@@ -1558,9 +1621,9 @@ class _ExerciseDraft {
     refreshFocusDebugLabels();
   }
 
-  final int id;
-  final String name;
-  final String category;
+  int id;
+  String name;
+  String category;
   final List<_SetDraft> sets;
   final List<_SetHistoryEntry> _history;
   final Map<int, _SetHistoryEntry> _historyByOrdinal;
@@ -1588,6 +1651,33 @@ class _ExerciseDraft {
 
   void updateRestTarget(Duration target) {
     restTarget = target;
+  }
+
+  void updateDetails({
+    required int id,
+    required String name,
+    required String category,
+    List<_SetHistoryEntry>? history,
+  }) {
+    this.id = id;
+    this.name = name;
+    this.category = category;
+    if (history != null) {
+      _resetHistory(history);
+    }
+    refreshFocusDebugLabels();
+  }
+
+  void _resetHistory(List<_SetHistoryEntry> history) {
+    final prepared = _prepareHistory(history);
+    _history
+      ..clear()
+      ..addAll(prepared);
+    _historyByOrdinal
+      ..clear();
+    for (final entry in _history) {
+      _historyByOrdinal[entry.ordinal] = entry;
+    }
   }
 
   void refreshFocusDebugLabels() {
@@ -1701,6 +1791,30 @@ class _SetDraftData {
 
   final List<_SetDraft> drafts;
   final List<_SetHistoryEntry> history;
+}
+
+class _HistoryComputationResult {
+  const _HistoryComputationResult({
+    required this.historyEntries,
+    required this.createdByOrdinal,
+  });
+
+  final List<_SetHistoryEntry> historyEntries;
+  final Map<int, DateTime?> createdByOrdinal;
+}
+
+class _ExerciseSelection {
+  _ExerciseSelection({
+    required this.id,
+    required this.name,
+    required this.category,
+    this.wasCreated = false,
+  });
+
+  final int id;
+  final String name;
+  final String category;
+  final bool wasCreated;
 }
 
 class Ticker {

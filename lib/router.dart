@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'screens/home/home_screen.dart';
+import 'screens/library/exercise_detail_screen.dart';
 import 'screens/library/library_screen.dart';
 import 'screens/log/log_screen.dart';
 import 'screens/log/workout_detail_screen.dart';
