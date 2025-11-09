@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:gym_tracker/models/home_highlight.dart';
 import 'package:gym_tracker/shared/set_tags.dart';
 import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:path/path.dart' as p;
@@ -119,6 +120,113 @@ class LocalStore {
     final tmp = File('${_file!.path}.tmp');
     await tmp.writeAsString(json.encode(_db), flush: true);
     await tmp.rename(_file!.path);
+  }
+
+  /// Derives home screen highlight entries using recent workout data.
+  Future<List<HomeHighlight>> listHomeHighlights({
+    int userId = 1,
+    Duration lookback = const Duration(days: 30),
+    int? limit = 3,
+  }) async {
+    await init();
+    final unit = await getWeightUnit();
+    final now = DateTime.now().toUtc();
+    final cutoff = now.subtract(lookback);
+
+    final sets = List<Map<String, dynamic>>.from(_db['sets'] ?? const []);
+    final exercises = List<Map<String, dynamic>>.from(_db['exercises'] ?? const []);
+
+    final exerciseNameById = <int, String>{
+      for (final row in exercises)
+        if (row['id'] != null)
+          (row['id'] as num).toInt(): (row['name'] ?? '').toString().trim().isEmpty
+              ? 'Exercise ${(row['id'] as num).toInt()}'
+              : (row['name'] ?? '').toString(),
+    };
+
+    final userSets = sets.where((row) {
+      final uid = (row['user_id'] as num?)?.toInt() ?? 1;
+      return uid == userId;
+    }).toList()
+      ..sort((a, b) {
+        final da = DateTime.tryParse((a['created_at'] ?? '').toString())?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+        final db = DateTime.tryParse((b['created_at'] ?? '').toString())?.toUtc() ??
+            DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+        return da.compareTo(db);
+      });
+
+    final prHighlights = <HomeHighlight>[];
+    final bestByExerciseAndReps = <String, double>{};
+
+    for (final row in userSets) {
+      final exerciseId = (row['exercise_id'] as num?)?.toInt();
+      final reps = (row['reps'] as num?)?.toInt();
+      final weight = (row['weight'] as num?)?.toDouble();
+      final createdAt = DateTime.tryParse((row['created_at'] ?? '').toString())?.toUtc();
+      if (exerciseId == null || reps == null || weight == null || createdAt == null) {
+        continue;
+      }
+      if (reps <= 0 || weight <= 0) continue;
+
+      final key = '$exerciseId:$reps';
+      final bestSoFar = bestByExerciseAndReps[key];
+      final isNewBest = bestSoFar == null || weight > bestSoFar + 1e-6;
+      if (isNewBest) {
+        if (createdAt.isAfter(cutoff)) {
+          final exerciseName = exerciseNameById[exerciseId] ?? 'Exercise $exerciseId';
+          final weightText = formatSetWeight(weight, unit);
+          prHighlights.add(
+            HomeHighlight(
+              type: HomeHighlightType.pr,
+              title: 'New ${reps}RM on $exerciseName',
+              subtitle: 'Hit $weightText ${unit.label} × $reps',
+              createdAt: createdAt,
+            ),
+          );
+        }
+        bestByExerciseAndReps[key] = weight;
+      }
+    }
+
+    prHighlights.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    final metaHighlights = <HomeHighlight>[];
+    final stats = await getHomeStats(userId: userId);
+    final deltaRising = stats.e1rmDelta > 0;
+    final deltaAmount = unit.fromKilograms(stats.e1rmDelta.abs());
+    if (deltaRising && deltaAmount >= 0.25) {
+      final fav = stats.favouriteExercise.trim();
+      final target = fav.isEmpty || fav == '—' ? 'Your favourite lift' : fav;
+      final deltaText = formatWeightDelta(stats.e1rmDelta, unit);
+      metaHighlights.add(
+        HomeHighlight(
+          type: HomeHighlightType.trend,
+          title: 'Strength trending up',
+          subtitle: '$target up $deltaText ${unit.label} vs last week',
+          createdAt: now.subtract(const Duration(minutes: 1)),
+        ),
+      );
+    }
+
+    final prSelection = limit == null ? prHighlights : prHighlights.take(2).toList();
+    final combined = <HomeHighlight>[]
+      ..addAll(prSelection)
+      ..addAll(metaHighlights);
+
+    combined.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    final seenKeys = <String>{};
+    final result = <HomeHighlight>[];
+    for (final highlight in combined) {
+      final key = '${highlight.type}-${highlight.title}';
+      if (seenKeys.add(key)) {
+        result.add(highlight);
+      }
+      if (limit != null && result.length >= limit) break;
+    }
+
+    return result;
   }
 
   void _notifyWorkoutsChanged() {

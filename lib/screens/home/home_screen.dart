@@ -3,7 +3,9 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
+import 'package:gym_tracker/models/home_highlight.dart';
 import 'package:gym_tracker/screens/home/home_calendar_sheet.dart';
+import 'package:gym_tracker/screens/home/home_highlights_sheet.dart';
 import 'package:gym_tracker/shared/formatting.dart';
 import 'package:gym_tracker/shared/weight_units.dart';
 import 'package:gym_tracker/shared/session_detail.dart';
@@ -435,53 +437,111 @@ class _Highlights extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: scheme.surface.withOpacity(0.35),
-            border: Border.all(color: scheme.outlineVariant.withOpacity(0.25)),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Text('Highlights',
-                      style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  TextButton(onPressed: () {}, child: const Text('See all')),
-                ]),
-                const SizedBox(height: 8),
-                const ListTile(
-                  dense: true,
-                  leading: Icon(Icons.emoji_events_outlined),
-                  title: Text('New 5RM PR on Bench'),
-                  subtitle: Text('Great job! Keep the momentum.'),
-                ),
-                Divider(color: scheme.outlineVariant.withOpacity(0.25)),
-                ValueListenableBuilder<WeightUnit>(
-                  valueListenable: LocalStore.instance.weightUnitListenable,
-                  builder: (context, unit, _) {
-                    final delta = unit.fromKilograms(2.5);
-                    final formatted = delta >= 10 ? delta.toStringAsFixed(0) : delta.toStringAsFixed(1);
-                    return ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.trending_up_rounded),
-                      title: Text('e1RM +$formatted ${unit.label} on Squat'),
-                      subtitle: const Text('Progress trending up this week.'),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return ValueListenableBuilder<int>(
+      valueListenable: LocalStore.instance.workoutsRevisionListenable,
+      builder: (context, __, ___) {
+        return ValueListenableBuilder<WeightUnit>(
+          valueListenable: LocalStore.instance.weightUnitListenable,
+          builder: (context, ___, ____) {
+            return FutureBuilder<List<HomeHighlight>>(
+              future: LocalStore.instance.listHomeHighlights(),
+              builder: (context, snapshot) {
+                final isLoading = snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData;
+                final highlights = snapshot.data ?? const <HomeHighlight>[];
+
+                return ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: scheme.surface.withOpacity(0.35),
+                        border: Border.all(color: scheme.outlineVariant.withOpacity(0.25)),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Highlights',
+                                  style: t.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                                const Spacer(),
+                                TextButton(
+                                  onPressed: highlights.isEmpty
+                                      ? null
+                                      : () => showHomeHighlightsSheet(context),
+                                  child: const Text('See all'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            if (isLoading)
+                              SizedBox(
+                                height: 96,
+                                child: Center(
+                                  child: CircularProgressIndicator(color: scheme.primary),
+                                ),
+                              )
+                            else if (highlights.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Text(
+                                  'Log a workout to unlock highlights.',
+                                  style: t.bodyMedium,
+                                ),
+                              )
+                            else
+                              ..._buildHighlightTiles(highlights, scheme, t),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
     );
+  }
+
+  List<Widget> _buildHighlightTiles(
+    List<HomeHighlight> highlights,
+    ColorScheme scheme,
+    TextTheme textTheme,
+  ) {
+    final tiles = <Widget>[];
+    for (int i = 0; i < highlights.length; i++) {
+      final item = highlights[i];
+      tiles.add(
+        ListTile(
+          dense: true,
+          leading: Icon(_iconForType(item.type)),
+          title: Text(item.title, style: textTheme.titleSmall),
+          subtitle: Text(item.subtitle, style: textTheme.bodySmall),
+        ),
+      );
+      if (i < highlights.length - 1) {
+        tiles.add(Divider(color: scheme.outlineVariant.withOpacity(0.25)));
+      }
+    }
+    return tiles;
+  }
+
+  IconData _iconForType(HomeHighlightType type) {
+    switch (type) {
+      case HomeHighlightType.pr:
+        return Icons.emoji_events_outlined;
+      case HomeHighlightType.trend:
+        return Icons.trending_up_rounded;
+      case HomeHighlightType.consistency:
+        return Icons.auto_graph_rounded;
+    }
   }
 }
