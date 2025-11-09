@@ -906,6 +906,8 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                                 });
                               },
                               itemBuilder: (context) => const [
+                                PopupMenuItem(value: 30, child: Text('0:30')),
+                                PopupMenuItem(value: 45, child: Text('0:45')),
                                 PopupMenuItem(value: 60, child: Text('1:00')),
                                 PopupMenuItem(value: 90, child: Text('1:30')),
                                 PopupMenuItem(value: 120, child: Text('2:00')),
@@ -1575,9 +1577,6 @@ class _ExerciseDraft {
   }
 
   void startRest(DateTime now) {
-    if (lastRestDuration != null) {
-      restTarget = lastRestDuration!;
-    }
     restStartedAt = now;
   }
 
