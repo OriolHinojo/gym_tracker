@@ -41,6 +41,9 @@ class WorkoutEditor extends StatefulWidget {
     this.onDiscarded,
   });
 
+  @visibleForTesting
+  static bool debugDisableTicker = false;
+
   final int? templateId;
   final String? workoutId;
   final int? editWorkoutId;
@@ -112,8 +115,8 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
     super.initState();
     _ticker = Ticker((elapsed) {
       if (mounted) setState(() => _elapsed = elapsed);
-    })
-      ..start();
+    });
+    _startTickerIfEnabled();
     _weightUnitListenable = LocalStore.instance.weightUnitListenable;
     _weightUnit = _weightUnitListenable.value;
     _weightUnitListener = () {
@@ -123,6 +126,12 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
     _weightUnitListenable.addListener(_weightUnitListener!);
 
     _initializeFromRoute();
+  }
+
+  void _startTickerIfEnabled() {
+    if (!WorkoutEditor.debugDisableTicker) {
+      _ticker.start();
+    }
   }
 
   Future<void> _initializeFromRoute() async {
@@ -340,7 +349,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
       _ticker.pause();
     } else {
       _ticker.reset();
-      _ticker.start();
+      _startTickerIfEnabled();
     }
     if (!enableEditing && usePlaceholders && _exercises.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _focusFirstEmptyField(_exercises.first));
@@ -360,7 +369,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
       _activeTemplateId = null;
     });
     _ticker.reset();
-    _ticker.start();
+    _startTickerIfEnabled();
   }
 
   Future<void> _repeatPreviousFlow() async {
@@ -542,7 +551,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
       _running = true;
     });
     _ticker.reset();
-    _ticker.start();
+    _startTickerIfEnabled();
   }
 
   @visibleForTesting
@@ -597,6 +606,11 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
   void debugDuplicateLastSetForTest(int exerciseId) {
     final exercise = _exercises.firstWhere((e) => e.id == exerciseId, orElse: () => throw ArgumentError('Exercise not found'));
     _duplicateLastSet(exercise);
+  }
+
+  @visibleForTesting
+  void debugStopTicker() {
+    _ticker.stop();
   }
 
   Future<void> _discardCurrentWorkout() async {
@@ -762,7 +776,7 @@ class _WorkoutEditorState extends State<WorkoutEditor> {
                     setState(() {
                       _running = !_running;
                       if (_running) {
-                        _ticker.start();
+                        _startTickerIfEnabled();
                       } else {
                         _ticker.pause();
                       }
@@ -1834,6 +1848,11 @@ class Ticker {
 
   void pause() {
     _sw.stop();
+  }
+
+  void stop() {
+    _sw.stop();
+    _loopActive = false;
   }
 
   void reset() {

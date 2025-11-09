@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gym_tracker/data/local/local_store.dart';
 import 'package:gym_tracker/screens/log/log_screen.dart';
+import 'package:gym_tracker/widgets/workout_editor.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -25,10 +26,8 @@ void main() {
     });
 
     testWidgets('expanding exercise focuses first empty weight field', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LogScreen()));
-
-      final state = tester.state(find.byType(LogScreen)) as dynamic;
-      state.debugAddExerciseForTest(
+      final editorState = await _pumpLogScreenAndGetEditorState(tester);
+      editorState.debugAddExerciseForTest(
         id: 1,
         presetSets: [
           {'weight': '', 'reps': ''},
@@ -39,14 +38,12 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(state.debugWeightHasFocus(1, 1), isTrue);
+      expect(editorState.debugWeightHasFocus(1, 1), isTrue);
     });
 
     testWidgets('duplicate last set copies previous values', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LogScreen()));
-
-      final state = tester.state(find.byType(LogScreen)) as dynamic;
-      state.debugAddExerciseForTest(
+      final editorState = await _pumpLogScreenAndGetEditorState(tester);
+      editorState.debugAddExerciseForTest(
         id: 1,
         presetSets: [
           {'weight': '120', 'reps': '5'},
@@ -56,15 +53,23 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      final before = state.debugExerciseSets(1);
-      state.debugDuplicateLastSetForTest(1);
+      final before = editorState.debugExerciseSets(1);
+      editorState.debugDuplicateLastSetForTest(1);
 
       await tester.pump();
 
-      final after = state.debugExerciseSets(1);
+      final after = editorState.debugExerciseSets(1);
       expect(after.length, before.length + 1);
       expect(after.last['weight'], before.last['weight']);
       expect(after.last['reps'], before.last['reps']);
     });
   });
+}
+
+Future<dynamic> _pumpLogScreenAndGetEditorState(WidgetTester tester) async {
+  WorkoutEditor.debugDisableTicker = true;
+  addTearDown(() => WorkoutEditor.debugDisableTicker = false);
+  await tester.pumpWidget(const MaterialApp(home: LogScreen()));
+  await tester.pump(); // allow WorkoutEditor to mount
+  return tester.state(find.byType(WorkoutEditor));
 }

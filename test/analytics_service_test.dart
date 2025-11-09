@@ -28,12 +28,40 @@ void main() {
       }
     });
 
-    test('computes snapshot from seeded data', () async {
+    test('computes snapshot from deterministic seeded data', () async {
+      final base = DateTime.utc(2024, 1, 1);
+      Future<void> addWorkout({
+        required DateTime startedAt,
+        required int exerciseId,
+        required double weight,
+        required int reps,
+      }) {
+        return LocalStore.instance.saveWorkout(
+          userId: 1,
+          name: 'Session ${startedAt.day}',
+          templateId: null,
+          startedAtUtc: startedAt,
+          sets: [
+            {
+              'exercise_id': exerciseId,
+              'ordinal': 1,
+              'reps': reps,
+              'weight': weight,
+              'created_at': startedAt,
+            },
+          ],
+        );
+      }
+
+      await addWorkout(startedAt: base, exerciseId: 1, weight: 100, reps: 5); // 500
+      await addWorkout(startedAt: base.add(const Duration(days: 1)), exerciseId: 2, weight: 150, reps: 4); // 600
+      await addWorkout(startedAt: base.add(const Duration(days: 2)), exerciseId: 3, weight: 220, reps: 6); // 1320
+
       final snapshot = await service.snapshot();
 
       expect(snapshot.sessionCount, 3);
-      expect(snapshot.totalVolume, closeTo(2690, 0.1));
-      expect(snapshot.averageVolumePerSession, closeTo(896.6, 0.2));
+      expect(snapshot.totalVolume, closeTo(2420, 0.1));
+      expect(snapshot.averageVolumePerSession, closeTo(806.6, 0.2));
       expect(snapshot.volumeTrend.length, 3);
     });
 
