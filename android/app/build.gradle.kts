@@ -1,8 +1,21 @@
+// app/build.gradle.kts
+
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Load keystore properties (android/key.properties)
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        load(FileInputStream(keystorePropertiesFile))
+    }
 }
 
 android {
@@ -11,12 +24,12 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        // Use Java 17 (recommended with recent Android Gradle Plugin)
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "17"
     }
 
     defaultConfig {
@@ -30,12 +43,33 @@ android {
         versionName = flutter.versionName
     }
 
+    // 🔐 Define the release signing config
+    signingConfigs {
+        create("release") {
+            if (keystorePropertiesFile.exists()) {
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String) // <-- fix here
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // ✅ Apply your release signing config
+            signingConfig = signingConfigs.getByName("release")
+
+            // Optional optimizations:
+            // isMinifyEnabled = true
+            // isShrinkResources = true
+            // proguardFiles(
+            //     getDefaultProguardFile("proguard-android-optimize.txt"),
+            //     "proguard-rules.pro"
+            // )
         }
+        // debug { // don’t point debug to release signing
+        // }
     }
 }
 
